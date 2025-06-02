@@ -6,6 +6,7 @@
 #include "server/server_api.h"
 #include "router/router_api.h"
 #include "mail/mail_api.h"
+#include "db/db_api.h"
 
 static bool m_die = false;
 

@@ -3,7 +3,7 @@ NAME = truco
 #########
 RM = rm -rf
 CC = cc
-CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL -lpthread #-DDEBUG
+CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -Iinc -DUSE_SSL -lpthread -lpq #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=thread -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 LDFLAGS =	-Lsrcs/log -llog \
@@ -11,10 +11,11 @@ LDFLAGS =	-Lsrcs/log -llog \
 			-Lsrcs/server -lserver \
 			-Lsrcs/router -lrouter \
 			-Lsrcs/mail -lmail \
-			-L$(OPENSSL_BUILD_DIR)/lib -lssl -lcrypto -lpthread -lm -ldl
+			-Lsrcs/db -ldb \
+			-L$(OPENSSL_BUILD_DIR)/lib -lssl -lcrypto -lpthread -lm -ldl -lpq
 RELEASE_CFLAGS = -Werror -Wextra -Wall -g -O3
 
-LIB_DIRS := log parse server router mail
+LIB_DIRS := log parse server router mail db
 LIB_PATHS := $(addprefix srcs/, $(LIB_DIRS))
 LIBS := $(addprefix -l, $(LIB_DIRS))
 LIBFLAGS := $(addprefix -Lsrcs/, $(LIB_DIRS))
@@ -83,6 +84,7 @@ fclean: clean
 	@make --silent -C srcs/server fclean
 	@make --silent -C srcs/router fclean
 	@make --silent -C srcs/mail fclean
+	@make --silent -C srcs/db fclean
 	@$(RM) $(NAME)
 	@cd $(OPENSSL_SRC_DIR) 2>/dev/null && [ -f Makefile ] && make clean || true
 	@rm -rf $(OPENSSL_INSTALL_DIR)
@@ -108,7 +110,7 @@ re: fclean all
 		echo ".gitignore already exists."; \
 	fi
 
-.PHONY: all clean fclean re release .gitignore compile_ssl create_cert
+.PHONY: all clean fclean re release .gitignore compile_ssl create_cert  db_up db_down db_reset
 
 create_cert:
 	@if [ ! -f certs/cert.pem ]; then \
@@ -117,5 +119,25 @@ create_cert:
 	else \
 		echo "Certificate already exists."; \
 	fi
+
+
+
+# Rule to bring the database up
+db_up:
+	@echo "Starting the database using Docker Compose..."
+	@docker compose -f BBDD/docker-compose.yml up -d
+	@echo "Database is up and running."
+
+# Rule to bring the database down
+db_down:
+	@echo "Stopping the database using Docker Compose..."
+	@docker compose -f BBDD/docker-compose.yml down
+	@echo "Database has been stopped."
+
+# Rule to reset the database (down and up)
+db_reset: db_down db_up
+	@echo "Database has been reset."
+
+
 
 -include $(DEP)
