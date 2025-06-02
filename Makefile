@@ -10,10 +10,11 @@ LDFLAGS =	-Lsrcs/log -llog \
 			-Lsrcs/parse -lparse \
 			-Lsrcs/server -lserver \
 			-Lsrcs/router -lrouter \
+			-Lsrcs/mail -lmail \
 			-L$(OPENSSL_BUILD_DIR)/lib -lssl -lcrypto -lpthread -lm -ldl
 RELEASE_CFLAGS = -Werror -Wextra -Wall -g -O3
 
-LIB_DIRS := log parse server router
+LIB_DIRS := log parse server router mail
 LIB_PATHS := $(addprefix srcs/, $(LIB_DIRS))
 LIBS := $(addprefix -l, $(LIB_DIRS))
 LIBFLAGS := $(addprefix -Lsrcs/, $(LIB_DIRS))
@@ -81,6 +82,7 @@ fclean: clean
 	@make --silent -C srcs/parse fclean
 	@make --silent -C srcs/server fclean
 	@make --silent -C srcs/router fclean
+	@make --silent -C srcs/mail fclean
 	@$(RM) $(NAME)
 	@cd $(OPENSSL_SRC_DIR) 2>/dev/null && [ -f Makefile ] && make clean || true
 	@rm -rf $(OPENSSL_INSTALL_DIR)
