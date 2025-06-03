@@ -1,7 +1,8 @@
 include ../../config.mk
 
 NAME = libdb.a
-SRC = db.c
+SRC = db.c \
+	  db_users.c
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs

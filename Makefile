@@ -124,6 +124,7 @@ create_cert:
 
 # Rule to bring the database up
 db_up:
+	@service docker start || true
 	@echo "Starting the database using Docker Compose..."
 	@docker compose -f BBDD/docker-compose.yml up -d
 	@echo "Database is up and running."
@@ -134,9 +135,15 @@ db_down:
 	@docker compose -f BBDD/docker-compose.yml down
 	@echo "Database has been stopped."
 
+db_clean:
+	@docker volume rm bbdd_postgres_data
+
 # Rule to reset the database (down and up)
 db_reset: db_down db_up
 	@echo "Database has been reset."
+
+db_connect:
+	@psql -h localhost -p 5432 -U admin -d matcha_db
 
 
 

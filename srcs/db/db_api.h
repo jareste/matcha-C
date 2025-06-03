@@ -3,9 +3,12 @@
 
 #include <libpq-fe.h>
 #include <stdint.h>
+// #include "db_users.h"
 
 typedef uintptr_t DB_ID;
 #define INVALID_DB_ID ((DB_ID)~0)
+
+int db_init(DB_ID* DB, char* host, char* port, char* user, char* pwd, char* dbname);
 
 DB_ID db_connect(const char *conninfo);
 

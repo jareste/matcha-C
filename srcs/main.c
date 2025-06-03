@@ -7,6 +7,7 @@
 #include "router/router_api.h"
 #include "mail/mail_api.h"
 #include "db/db_api.h"
+#include "db/db_users.h"
 
 static bool m_die = false;
 
@@ -40,10 +41,66 @@ int main_loop()
     return 0;
 }
 
+typedef struct
+{
+    const char *username;
+    const char *email;
+    const char *password_hash;
+    const char *first_name;
+    const char *last_name;
+    const char *gender;
+    const char *orientation;
+    const char *bio;
+    int fame_rating;
+    double gps_lat;
+    double gps_lon;
+    bool location_optout;
+    const char *last_online;
+} user_t;
+
+static int m_foo_instert_db_users(DB_ID DB)
+{
+    int res;
+    user_t u[6] = 
+    {
+        {"jareste", "jar@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
+        {"alice", "jar1@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
+        {"silly", "jar2@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
+        {"jareste2", "jar3@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
+        {"jareste3", "jar4@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
+        {"jareste4", "jar5@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"}
+    };
+
+    for (int i = 0; i < 6; i++)
+    {
+        res = DB_user_insert(DB, u[i].username, u[i].email, u[i].password_hash, u[i].first_name,\
+        u[i].last_name, u[i].gender, u[i].orientation, u[i].bio, u[i].fame_rating, u[i].gps_lat,\
+        u[i].gps_lon, u[i].location_optout, u[i].last_online);
+        if (res == ERROR)
+        {
+            fprintf(stderr, "FAILED SO MUUUUUUUUUUUUUCH\n");
+            return ERROR;
+        }
+        printf("Inserted user '%s'\n", u[i].username);
+    }
+
+    res = DB_user_print_all(DB);
+    if (res == ERROR)
+    {
+        fprintf(stderr, "FAILED SO MUUUUUUUUUUUUUCH2\n");
+        return ERROR;
+    }
+    printf("Donete\n");
+
+    return SUCCESS;
+}
+
+
 int main()
 {
     ssl_config ssl_config;
     log_config log_config;
+    DB_ID DB;
 
     if (parse_config("config") == ERROR)
             goto error;
@@ -57,6 +114,12 @@ int main()
         goto error;
 
     server_set_http_request_handler(m_http_request_handler);
+
+    if (db_init(&DB, "localhost", "5432", "admin", "1234qwer", "matcha_db") == ERROR)
+        goto error;
+
+    if (m_foo_instert_db_users(DB) == ERROR)
+        goto error;
 
     parse_free_config(); /* init config */
 

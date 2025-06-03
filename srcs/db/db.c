@@ -3,6 +3,9 @@
 #include <string.h>
 #include <stddef.h>
 #include "db_api.h"
+#include "db_users.h"
+#include "../../inc/error_codes.h"
+#include "../../inc/ft_malloc.h"
 
 static inline DB_ID m_PGconn_ptr_to_id(PGconn  *db)
 {
@@ -143,4 +146,33 @@ void db_close(DB_ID db)
     {
         PQfinish(conn);
     }
+}
+
+int db_init(DB_ID* DB, char* host, char* port,\
+            char* user, char* pwd, char* dbname)
+{
+    char conninfo[512] = {0};
+    int res;
+
+    snprintf(conninfo, sizeof(conninfo),
+             "host=%s port=%s user=%s password=%s dbname=%s",
+             host, port, user, pwd, dbname);
+
+    *DB = db_connect(conninfo);
+    if (*DB == INVALID_DB_ID)
+    {
+        return ERROR;
+    }
+
+    res = DB_user_create_table(*DB);
+    if (res == ERROR)
+    {
+        fprintf(stderr, "ERROR: Failed to create user table\n");
+        db_close(*DB);
+        *DB = INVALID_DB_ID;
+        return ERROR;
+    }
+
+    return SUCCESS;
+
 }
