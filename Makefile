@@ -120,16 +120,12 @@ create_cert:
 		echo "Certificate already exists."; \
 	fi
 
-
-
-# Rule to bring the database up
 db_up:
 	@service docker start || true
 	@echo "Starting the database using Docker Compose..."
 	@docker compose -f BBDD/docker-compose.yml up -d
 	@echo "Database is up and running."
 
-# Rule to bring the database down
 db_down:
 	@echo "Stopping the database using Docker Compose..."
 	@docker compose -f BBDD/docker-compose.yml down
@@ -138,8 +134,7 @@ db_down:
 db_clean:
 	@docker volume rm bbdd_postgres_data
 
-# Rule to reset the database (down and up)
-db_reset: db_down db_up
+db_reset: db_down db_clean db_up
 	@echo "Database has been reset."
 
 db_connect:

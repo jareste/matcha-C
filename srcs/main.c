@@ -7,7 +7,8 @@
 #include "router/router_api.h"
 #include "mail/mail_api.h"
 #include "db/db_api.h"
-#include "db/db_users.h"
+#include "db/tables/db_table_user.h"
+#include "db/db_gen.h"
 
 static bool m_die = false;
 
@@ -41,60 +42,78 @@ int main_loop()
     return 0;
 }
 
-typedef struct
+/* TEST */
+static int m_foo_instert_db_users(DB_ID db)
 {
-    const char *username;
-    const char *email;
-    const char *password_hash;
-    const char *first_name;
-    const char *last_name;
-    const char *gender;
-    const char *orientation;
-    const char *bio;
-    int fame_rating;
-    double gps_lat;
-    double gps_lon;
-    bool location_optout;
-    const char *last_online;
-} user_t;
-
-static int m_foo_instert_db_users(DB_ID DB)
-{
-    int res;
-    user_t u[6] = 
-    {
-        {"jareste", "jar@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
-        {"alice", "jar1@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
-        {"silly", "jar2@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
-        {"jareste2", "jar3@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
-        {"jareste3", "jar4@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"},
-        {"jareste4", "jar5@jar.com", "fooo", "Joan", "Areste", "F", "BI", "gay", 2000, 0, 0, false, "today"}
-    };
-
-    for (int i = 0; i < 6; i++)
-    {
-        res = DB_user_insert(DB, u[i].username, u[i].email, u[i].password_hash, u[i].first_name,\
-        u[i].last_name, u[i].gender, u[i].orientation, u[i].bio, u[i].fame_rating, u[i].gps_lat,\
-        u[i].gps_lon, u[i].location_optout, u[i].last_online);
-        if (res == ERROR)
+    user_t users[] = {
         {
-            fprintf(stderr, "FAILED SO MUUUUUUUUUUUUUCH\n");
+            .username = "alice99",
+            .email = "alice@alice.com",
+            .password_hash = "hashed_pw_123",
+            .first_name = "Alice",
+            .last_name = "Anderson",
+            .gender = "Female",
+            .orientation = "Bisexual",
+            .bio = "Hello, I'm Alice!",
+            .fame_rating = 42,
+            .gps_lat = 37.7749,
+            .gps_lon = -122.4194,
+            .location_optout = false,
+            .last_online = "2025-06-03 14:22:00+00",
+            .created_at = 0
+        },
+        {
+            .username = "bob",
+            .email = "alicer@ralice.com",
+            .password_hash = "hashed_pw_123",
+            .first_name = "Aliece",
+            .last_name = "Andereson",
+            .gender = "Femaledas",
+            .orientation = "Bisedasxual",
+            .bio = "Hello, I'm Alicdasdae!",
+            .fame_rating = 422312,
+            .gps_lat = 3721.7741119,
+            .gps_lon = -1221.4194,
+            .location_optout = false,
+            .last_online = "2025-06-03 14:22:00+00",
+            .created_at = 0
+        },
+    };
+ 
+    for (int i = 0; i < (int)(sizeof(users) / sizeof(users[0])); i++)
+    {
+        if (db_tuser_insert_user(db, &users[i]) != SUCCESS)
+        {
+            fprintf(stderr, "ERROR: Failed to insert user '%s'\n", users[i].username);
             return ERROR;
         }
-        printf("Inserted user '%s'\n", u[i].username);
+        printf("✅ Inserted user '%s'\n", users[i].username);
     }
 
-    res = DB_user_print_all(DB);
-    if (res == ERROR)
+    user_t_array *all_users = db_tuser_select_all_users(db);
+    printf("\n👥 All users in the database:\n");
+    for (size_t i = 0; i < all_users->count; i++)
     {
-        fprintf(stderr, "FAILED SO MUUUUUUUUUUUUUCH2\n");
-        return ERROR;
+        user_t *user = all_users->users[i];
+        printf("User %d: %s, Email: %s, Fame Rating: %d\n", user->id, user->username, user->email, user->fame_rating);
     }
-    printf("Donete\n");
+
+    db_tuser_free_array(all_users);
+
+    db_tuser_delete_user_from_pk(db, "bob");
+
+    all_users = db_tuser_select_all_users(db);
+    printf("\n👥 All users in the database:\n");
+    for (size_t i = 0; i < all_users->count; i++)
+    {
+        user_t *user = all_users->users[i];
+        printf("User %d: %s, Email: %s, Fame Rating: %d\n", user->id, user->username, user->email, user->fame_rating);
+    }
+
+    db_tuser_free_array(all_users);
 
     return SUCCESS;
 }
-
 
 int main()
 {
@@ -116,6 +135,9 @@ int main()
     server_set_http_request_handler(m_http_request_handler);
 
     if (db_init(&DB, "localhost", "5432", "admin", "1234qwer", "matcha_db") == ERROR)
+        goto error;
+
+    if (db_tuser_init(DB) == ERROR)
         goto error;
 
     if (m_foo_instert_db_users(DB) == ERROR)
