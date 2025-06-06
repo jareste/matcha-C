@@ -3,7 +3,7 @@ NAME = truco
 #########
 RM = rm -rf
 CC = cc
-CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -Iinc -DUSE_SSL -lpthread -lpq #-DDEBUG
+CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL -lpthread -lpq #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=thread -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 LDFLAGS =	-Lsrcs/log -llog \
@@ -140,6 +140,9 @@ db_reset: db_down db_clean db_up
 db_connect:
 	@psql -h localhost -p 5432 -U admin -d matcha_db
 
-
+docker_start:
+	@echo "Starting Docker..."
+	@service docker start || true
+	@echo "Docker is running."
 
 -include $(DEP)

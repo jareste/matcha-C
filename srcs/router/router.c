@@ -3,25 +3,67 @@
 #include <string.h>
 #include <unistd.h>
 #include <arpa/inet.h>
+
 #include "../log/log_api.h"
 #include "../parse/config_file.h"
 #include "../../inc/ft_malloc.h"
 #include "../../inc/error_codes.h"
 #include "router_api.h"
 
-int router_handle_http_request(int fd, const char *request, size_t request_len)
+static route_entry_t* m_routes = NULL;
+
+void router_add(const char* path, route_cb_t cb, void* user_data)
 {
-    const char *method = NULL;
-    const char *route = NULL;
-    const char *headers = NULL;
-    const char *body = NULL;
-    const char *headers_end = NULL;
-    const char *first_line_end = NULL;
+    route_entry_t* entry = malloc(sizeof(*entry));
+
+    entry->path = strdup(path);
+    entry->handler = cb;
+    entry->user_data = user_data;
+    HASH_ADD_KEYPTR(hh, m_routes, entry->path, strlen(entry->path), entry);
+}
+
+static route_entry_t* router_find(const char* path)
+{
+    route_entry_t* entry = NULL;
+
+    HASH_FIND_STR(m_routes, path, entry);
+    return entry;
+}
+
+void router_delete(route_entry_t* entry)
+{
+    HASH_DEL(m_routes, entry);
+    free(entry->path);
+    free(entry);
+}
+
+void router_clear()
+{
+    route_entry_t* current;
+    route_entry_t* tmp;
+
+    HASH_ITER(hh, m_routes, current, tmp)
+    {
+        HASH_DEL(m_routes, current);
+        free(current->path);
+        free(current);
+    }
+}
+
+int router_handle_http_request(int fd, const char* request, size_t request_len)
+{
+    const char* method = NULL;
+    const char* route = NULL;
+    const char* headers = NULL;
+    const char* body = NULL;
+    const char* headers_end = NULL;
+    const char* first_line_end = NULL;
     char first_line[256] = {0};
     char* err_string = NULL;
-    char *space_pos = NULL;
+    char* space_pos = NULL;
     size_t headers_len = 0;
     size_t first_line_len = 0;
+    route_entry_t* route_entry = NULL;
     
     (void)request_len;
 
@@ -44,6 +86,25 @@ int router_handle_http_request(int fd, const char *request, size_t request_len)
                 *route_end = '\0';
             }
         }
+    }
+
+    if (!route)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Invalid HTTP request: No route found\n");
+        err_string = "HTTP/1.1 400 Bad Request\r\nContent-Type: text/plain\r\n\r\nBad Request\r\n";
+        send(fd, err_string, strlen(err_string), 0);
+        log_msg(LOG_LEVEL_ERROR, "Response sent to fd=%d\n", fd);
+        return ERROR;
+    }
+
+    route_entry = router_find(route);
+    if (!route_entry)
+    {
+        log_msg(LOG_LEVEL_ERROR, "No route found for '%s'\n", route);
+        err_string = "HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\n\r\nNot Found\r\n";
+        send(fd, err_string, strlen(err_string), 0);
+        log_msg(LOG_LEVEL_ERROR, "Response sent to fd=%d\n", fd);
+        return ERROR;
     }
 
     headers_end = strstr(request, "\r\n\r\n");

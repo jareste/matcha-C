@@ -14,7 +14,7 @@ $(NAME): $(OBJ)
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
 	echo "Compiling $< to $@"
-	@$(CC) $(CFLAGS) $(INCLUDES)  -c $< -o $@
+	$(CC) $(CFLAGS) $(INCLUDES)  -c $< -o $@
 
 clean:
 	$(RM) -rf $(OBJ_DIR)
