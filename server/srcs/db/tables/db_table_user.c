@@ -149,6 +149,38 @@ int db_tuser_free_array(user_t_array* users)
     return SUCCESS;
 }
 
+int db_select_user_by_username(DB_ID DB, const char* username, user_t** user)
+{
+    PGresult* r2;
+    const char *sql = "SELECT * FROM users WHERE username = $1;";
+    const char *params[1] = { username };
+
+    r2 = db_query(DB, sql, 1, params);
+    if (r2 && PQntuples(r2) == 1)
+    {
+        *user = calloc(sizeof(user_t), 1);
+        (*user)->id = atoi(PQgetvalue(r2, 0, 0));
+        (*user)->username = PQgetvalue(r2, 0, 1);
+        (*user)->email = PQgetvalue(r2, 0, 2);
+        (*user)->password_hash = PQgetvalue(r2, 0, 3);
+        (*user)->first_name = PQgetvalue(r2, 0, 4);
+        (*user)->last_name = PQgetvalue(r2, 0, 5);
+        (*user)->gender = PQgetvalue(r2, 0, 6);
+        (*user)->orientation = PQgetvalue(r2, 0, 7);
+        (*user)->bio = PQgetvalue(r2, 0, 8);
+        (*user)->fame_rating = atoi(PQgetvalue(r2, 0, 9));
+        (*user)->gps_lat = atof(PQgetvalue(r2, 0, 10));
+        (*user)->gps_lon = atof(PQgetvalue(r2, 0, 11));
+        (*user)->location_optout = (strcmp(PQgetvalue(r2, 0, 12), "t") == 0);
+        (*user)->last_online = PQgetvalue(r2, 0, 13);
+        (*user)->created_at = db_gen_parse_timestamp(PQgetvalue(r2, 0, 14));
+        (*user)->email_verified = (strcmp(PQgetvalue(r2, 0, 15), "t") == 0);
+    }
+
+    if (r2) db_clear_result(r2);
+    return SUCCESS;
+}
+
 int db_tuser_delete_user_from_pk(DB_ID DB, const char* name)
 {
     char* id;

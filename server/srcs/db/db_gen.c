@@ -29,47 +29,83 @@ int db_gen_create_table(DB_ID db, const tableSchema_t *schema)
 {
     char* sql = NULL;
     char* tmp;
-    const char* prefix = "CREATE TABLE IF NOT EXISTS ";
+    const char* prefix     = "CREATE TABLE IF NOT EXISTS ";
     const char* open_paren = " (";
+    const char* close      = ");";
     char buffer[512];
-    int  offset;
-    int i;
-    const columnDef_t* col;
-    const char *close = ");";
-    int rc;
+    int offset, i, rc;
 
-    if ((db == INVALID_DB_ID) || schema == NULL || schema->n_cols <= 0)
-    {
-        /* ERROR */
+    if (db == INVALID_DB_ID || schema == NULL || schema->n_cols <= 0) {
         return -1;
     }
-    
+
+    // 1) Count how many columns are marked primary
+    int pk_count = 0;
+    for (i = 0; i < schema->n_cols; i++) {
+        if (schema->columns[i].is_primary) pk_count++;
+    }
+
+    // 2) Start "CREATE TABLE IF NOT EXISTS <name> ("
     sql = m_str_concat(prefix, schema->name);
     tmp = m_str_concat(sql, open_paren);
-
     free(sql);
     sql = tmp;
 
-    for (i = 0; i < schema->n_cols; i++)
-    {
+    for (i = 0; i < schema->n_cols; i++) {
+        const columnDef_t *col = &schema->columns[i];
         offset = 0;
-        col = &schema->columns[i];
-        offset += snprintf(buffer + offset, sizeof(buffer)-offset,
+
+        offset += snprintf(buffer + offset, sizeof(buffer) - offset,
                            "%s %s", col->name, col->type);
 
         if (col->not_null)
-            offset += snprintf(buffer + offset, sizeof(buffer)-offset, " NOT NULL");
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                               " NOT NULL");
         if (col->is_unique)
-            offset += snprintf(buffer + offset, sizeof(buffer)-offset, " UNIQUE");
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                               " UNIQUE");
         if (col->default_val)
-            offset += snprintf(buffer + offset, sizeof(buffer)-offset, " DEFAULT %s", col->default_val);
-        if (col->is_primary)
-            offset += snprintf(buffer + offset, sizeof(buffer)-offset, " PRIMARY KEY");
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                               " DEFAULT %s", col->default_val);
 
-        if (i < schema->n_cols - 1)
-            offset += snprintf(buffer + offset, sizeof(buffer)-offset, ", ");
+        if (col->is_primary && pk_count == 1)
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                               " PRIMARY KEY");
+
+        if (i < schema->n_cols - 1 || pk_count > 1)
+            offset += snprintf(buffer + offset, sizeof(buffer) - offset,
+                               ", ");
 
         tmp = m_str_concat(sql, buffer);
+        free(sql);
+        sql = tmp;
+    }
+
+    if (pk_count > 1)
+    {
+        tmp = m_str_concat(sql, "PRIMARY KEY (");
+        free(sql);
+        sql = tmp;
+
+        int first = 1;
+        for (i = 0; i < schema->n_cols; i++)
+        {
+            if (schema->columns[i].is_primary)
+            {
+                if (!first)
+                {
+                    tmp = m_str_concat(sql, ", ");
+                    free(sql);
+                    sql = tmp;
+                }
+                tmp = m_str_concat(sql, schema->columns[i].name);
+                free(sql);
+                sql = tmp;
+                first = 0;
+            }
+        }
+
+        tmp = m_str_concat(sql, ")");
         free(sql);
         sql = tmp;
     }

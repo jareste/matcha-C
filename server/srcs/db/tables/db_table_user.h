@@ -34,6 +34,7 @@ typedef struct
 int db_tuser_init(DB_ID DB);
 int db_tuser_insert_user(DB_ID DB, user_t* u);
 user_t_array* db_tuser_select_all_users(DB_ID DB);
+int db_select_user_by_username(DB_ID DB, const char* username, user_t** user);
 int db_tuser_free_array(user_t_array* users);
 int db_tuser_delete_user_from_pk(DB_ID DB, const char* name);
 int db_tuser_update_user(DB_ID DB, const user_t *u);

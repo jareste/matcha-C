@@ -8,6 +8,7 @@
 #include "mail/mail_api.h"
 #include "db/db_api.h"
 #include "db/tables/db_table_user.h"
+#include "db/tables/db_table_tag.h"
 #include "db/db_gen.h"
 
 static bool m_die = false;
@@ -126,6 +127,53 @@ static int m_foo_instert_db_users(DB_ID db)
 
     db_tuser_free_array(all_users);
 
+    db_ttag_insert_tag(db, "music");
+    db_ttag_insert_tag(db, "music");
+
+    // List all tags:
+    tag_t_array *tags = db_ttag_select_all_tags(db);
+    for (size_t i = 0; i < tags->count; i++) {
+        printf("Tag %d: %s\n", tags->tags[i]->id, tags->tags[i]->name);
+    }
+    printf("Total tags: %zu\n", tags->count);
+    db_ttag_free_array(tags);
+
+    // Update a tag:
+    tag_t* tag;
+    db_ttag_select_tag_by_name(db, "music", &tag);
+    printf("Updating tag with ID %d to 'art'\n", tag->id);
+    db_ttag_update_tag(db, tag->id, "art");
+
+    tags = db_ttag_select_all_tags(db);
+    for (size_t i = 0; i < tags->count; i++) {
+        printf("Tag %d: %s\n", tags->tags[i]->id, tags->tags[i]->name);
+    }
+    printf("Total tags: %zu\n", tags->count);
+    db_ttag_free_array(tags);
+
+
+    // Delete a tag:
+    printf("Deleting tag with ID 1\n");
+    db_ttag_delete_tag_from_pk(db, 2);
+
+    // Map user 1 ↔ tag 7:
+    printf("Mapping user 1 to tag 7\n");
+    db_ttag_insert_user_tag(db, 1, 7);
+
+    // Fetch tags for user 1:
+    printf("Fetching tags for user 1\n");
+    user_tag_array *maps = db_ttag_select_tags_for_user(db, 1);
+    printf("\nUser 1's tags:%zu\n", maps->count);
+    for (size_t i = 0; i < maps->count; i++) {
+        printf("User %d has tag %d\n",
+            maps->mappings[i]->user_id,
+            maps->mappings[i]->tag_id);
+    }
+    printf("Total mappings for user 1: %zu\n", maps->count);
+    db_ttag_free_map_array(maps);
+
+    db_ttag_delete_user_tag(db, 1, 7);
+
     return SUCCESS;
 }
 
@@ -155,6 +203,9 @@ int main()
         goto error;
 
     if (db_tuser_init(DB) == ERROR)
+        goto error;
+
+    if (db_ttag_init(DB) == ERROR)
         goto error;
     /* DB DONE */
 

@@ -3,7 +3,8 @@ include ../../config.mk
 NAME = libdb.a
 SRC = db.c \
 	  db_gen.c \
-	  tables/db_table_user.c
+	  tables/db_table_user.c \
+	  tables/db_table_tag.c \
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs

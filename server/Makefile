@@ -4,6 +4,7 @@ NAME = matCha
 RM = rm -rf
 CC = cc
 CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
+# CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=thread -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # POSTGRESS_LIB = -lpq
