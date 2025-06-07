@@ -21,7 +21,8 @@ const columnDef_t m_users_cols[] =
     { .name = "gps_lon",       .type = "DOUBLE PRECISION", .is_primary = false, .is_unique = false, .not_null = false, .default_val = NULL },
     { .name = "location_optout", .type = "BOOLEAN",        .is_primary = false, .is_unique = false, .not_null = false, .default_val = "FALSE" },
     { .name = "last_online",   .type = "TIMESTAMP",        .is_primary = false, .is_unique = false, .not_null = false, .default_val = NULL },
-    { .name = "created_at",    .type = "TIMESTAMP NOT NULL", .is_primary = false, .is_unique = false, .not_null = true, .default_val = "NOW()" }
+    { .name = "created_at",    .type = "TIMESTAMP NOT NULL", .is_primary = false, .is_unique = false, .not_null = true, .default_val = "NOW()" },
+    { .name = "email_verified", .type = "BOOLEAN",         .is_primary = false, .is_unique = false, .not_null = false, .default_val = "FALSE" }
 };
 
 const int m_n_users_cols = sizeof(m_users_cols) / sizeof(m_users_cols[0]);
@@ -71,7 +72,8 @@ int db_tuser_insert_user(DB_ID DB, user_t* u)
         /* gps_lon       */ lon_buf,
         /* location_optout */ bool_buf,
         /* last_online   */ u->last_online,
-        /* created_at    */ NULL /* Allways wanting default */
+        /* created_at    */ NULL, /* Allways wanting default */
+        /* email_verified */ NULL /* Allways wanting default */
     ) != 0)
     {
         /* ERROR. but could be that it already exists */
@@ -126,7 +128,8 @@ user_t_array* db_tuser_select_all_users(DB_ID DB)
         users[i]->gps_lon = atof(PQgetvalue(all, i, 11));
         users[i]->location_optout = (strcmp(PQgetvalue(all, i, 12), "t") == 0);
         users[i]->last_online = PQgetvalue(all, i, 13);
-        users[i]->created_at = 0; /* TODO */
+        users[i]->created_at = db_gen_parse_timestamp(PQgetvalue(all, i, 14));
+        users[i]->email_verified = (strcmp(PQgetvalue(all, i, 15), "t") == 0);
     }
     
     return result;
@@ -174,4 +177,42 @@ int db_tuser_delete_user_from_pk(DB_ID DB, const char* name)
     if (r2) db_clear_result(r2);
 
     return SUCCESS;
+}
+
+int db_tuser_update_user(DB_ID DB, const user_t *u)
+{
+    char id_buf[16];
+    char fame_buf[16];
+    char lat_buf[32];
+    char lon_buf[32];
+    char bool_buf[8];
+    int rc;
+
+    snprintf(id_buf,   sizeof(id_buf),   "%d",   u->id);
+    snprintf(fame_buf, sizeof(fame_buf), "%d",   u->fame_rating);
+    snprintf(lat_buf,  sizeof(lat_buf),  "%f",   u->gps_lat);
+    snprintf(lon_buf,  sizeof(lon_buf),  "%f",   u->gps_lon);
+    snprintf(bool_buf, sizeof(bool_buf), "%s",   u->location_optout ? "TRUE" : "FALSE");
+
+    rc = db_gen_update_by_pk(DB, &m_users_schema,
+        /* pk_value */   id_buf,
+
+        /* username      */ u->username,
+        /* email         */ u->email,
+        /* password_hash */ u->password_hash,
+        /* first_name    */ u->first_name,
+        /* last_name     */ u->last_name,
+        /* gender        */ u->gender,
+        /* orientation   */ u->orientation,
+        /* bio           */ u->bio,
+        /* fame_rating   */ fame_buf,
+        /* gps_lat       */ lat_buf,
+        /* gps_lon       */ lon_buf,
+        /* location_optout */ bool_buf,
+        /* last_online   */ u->last_online,
+        /* created_at    */ NULL,
+        /* email_verified */ u->email_verified ? "TRUE" : "FALSE"
+    );
+
+    return rc;
 }

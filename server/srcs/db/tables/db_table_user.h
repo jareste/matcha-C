@@ -21,6 +21,7 @@ typedef struct
     bool location_optout;
     const char *last_online;
     time_t created_at;
+    bool email_verified;
 } user_t;
 
 typedef struct 
@@ -35,5 +36,6 @@ int db_tuser_insert_user(DB_ID DB, user_t* u);
 user_t_array* db_tuser_select_all_users(DB_ID DB);
 int db_tuser_free_array(user_t_array* users);
 int db_tuser_delete_user_from_pk(DB_ID DB, const char* name);
+int db_tuser_update_user(DB_ID DB, const user_t *u);
 
 #endif /* DB_TABLE_USER_H */

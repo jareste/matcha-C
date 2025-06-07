@@ -70,4 +70,18 @@ PGresult *db_gen_select_all_from(DB_ID db, const tableSchema_t *schema);
  */
 int db_gen_delete_by_pk(DB_ID db, const tableSchema_t *schema, const char *pk_value);
 
+/*
+  *    UPDATE tableName SET <col1> = $1, <col2> = $2, ... WHERE <primary_key> = $n
+  *    Find the column marked as is_primary. You must pass exactly one
+  *    C‐string (the primary‐key value) in varargs, followed by the values
+  *    for each column to update, in the same order as columns[].
+  *    Returns 0 on success, non‐zero on error.
+  */
+int db_gen_update_by_pk(DB_ID db,
+                        const tableSchema_t *schema,
+                        const char *pk_value,
+                        ...);
+
+int db_gen_parse_timestamp(const char *timestamp_str);
+
 #endif /* DB_GENERIC_H */

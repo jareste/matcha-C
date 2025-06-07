@@ -21,6 +21,12 @@ typedef struct
     char* KEY_PATH;
     int PORT;
 
+    char* DB_HOST;
+    char* DB_PORT;
+    char* DB_USER;
+    char* DB_PASSWORD;
+    char* DB_NAME;
+
 } config_t;
 
 config_t* m_config_content = NULL;
@@ -37,6 +43,12 @@ static void m_init_config_content()
     m_config_content->CERT_PATH = strdup("cert.pem");
     m_config_content->KEY_PATH = strdup("key.pem");
     m_config_content->PORT = 12345;
+
+    m_config_content->DB_HOST = strdup("localhost");
+    m_config_content->DB_PORT = strdup("5432");
+    m_config_content->DB_USER = strdup("user");
+    m_config_content->DB_PASSWORD = strdup("password");
+    m_config_content->DB_NAME = strdup("database");
 }
 
 void parse_set_log_config(log_config* log)
@@ -51,6 +63,15 @@ void parse_set_ssl_config(ssl_config* ssl)
     ssl->CERT_PATH = m_config_content->CERT_PATH;
     ssl->KEY_PATH = m_config_content->KEY_PATH;
     ssl->PORT = m_config_content->PORT;
+}
+
+void parse_set_db_config(db_config* db)
+{
+    db->DB_HOST = m_config_content->DB_HOST;
+    db->DB_PORT = m_config_content->DB_PORT;
+    db->DB_USER = m_config_content->DB_USER;
+    db->DB_PASSWORD = m_config_content->DB_PASSWORD;
+    db->DB_NAME = m_config_content->DB_NAME;
 }
 
 void parse_free_config()
@@ -128,7 +149,31 @@ int parse_config(const char *filename)
         }
         else if (strcmp(key, "PORT") == 0)
             m_config_content->PORT = atoi(val);
-
+        else if (strcmp(key, "DB_HOST") == 0)
+        {
+            free(m_config_content->DB_HOST);
+            m_config_content->DB_HOST = strdup(val);
+        }
+        else if (strcmp(key, "DB_PORT") == 0)
+        {
+            free(m_config_content->DB_PORT);
+            m_config_content->DB_PORT = strdup(val);
+        }
+        else if (strcmp(key, "DB_USER") == 0)
+        {
+            free(m_config_content->DB_USER);
+            m_config_content->DB_USER = strdup(val);
+        }
+        else if (strcmp(key, "DB_PASSWORD") == 0)
+        {
+            free(m_config_content->DB_PASSWORD);
+            m_config_content->DB_PASSWORD = strdup(val);
+        }
+        else if (strcmp(key, "DB_NAME") == 0)
+        {
+            free(m_config_content->DB_NAME);
+            m_config_content->DB_NAME = strdup(val);
+        }
     }
 
     fclose(fp);

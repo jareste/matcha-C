@@ -95,7 +95,21 @@ static int m_foo_instert_db_users(DB_ID db)
     for (size_t i = 0; i < all_users->count; i++)
     {
         user_t *user = all_users->users[i];
-        printf("User %d: %s, Email: %s, Fame Rating: %d\n", user->id, user->username, user->email, user->fame_rating);
+        printf("User %d: %s,\n Email: %s,\n Fame Rating: %d\n"
+               "First Name: %s,\n Last Name: %s,\n"
+               "Bio: %s,\n Location Opt-out: %s,\n"
+               "Last Online: %s,\n Created At: %s\n"
+               "Gender: %s,\n Orientation: %s\n"
+               "GPS: (%f, %f)\n"
+               "email_verified: %s\n"
+               "----------------------------------------\n",
+               user->id, user->username, user->email, user->fame_rating,
+               user->first_name, user->last_name, user->bio,
+               user->location_optout ? "Yes" : "No",
+               user->last_online, ctime(&user->created_at),
+               user->gender, user->orientation,
+               user->gps_lat, user->gps_lon,
+               user->email_verified ? "Yes" : "No");
     }
 
     db_tuser_free_array(all_users);
@@ -119,6 +133,7 @@ int main()
 {
     ssl_config ssl_config;
     log_config log_config;
+    db_config db_config;
     DB_ID DB;
 
     if (parse_config("config") == ERROR)
@@ -134,14 +149,19 @@ int main()
 
     server_set_http_request_handler(m_http_request_handler);
 
-    if (db_init(&DB, "localhost", "5432", "admin", "1234qwer", "matcha_db") == ERROR)
+    /* INIT DBs */
+    parse_set_db_config(&db_config);
+    if (db_init(&DB, db_config.DB_HOST, db_config.DB_PORT, db_config.DB_USER, db_config.DB_PASSWORD, db_config.DB_NAME) == ERROR)
         goto error;
 
     if (db_tuser_init(DB) == ERROR)
         goto error;
+    /* DB DONE */
 
+    /* TEST */
     if (m_foo_instert_db_users(DB) == ERROR)
         goto error;
+    /* TEST_END */
 
     parse_free_config(); /* init config */
 

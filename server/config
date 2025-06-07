@@ -3,3 +3,9 @@ LOG_FILE_PATH=log.txt
 LOG_ERASE=y
 
 PORT=8080
+
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=admin
+DB_PASSWORD=1234qwer
+DB_NAME=matcha_db

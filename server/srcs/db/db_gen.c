@@ -1,9 +1,13 @@
+#define _XOPEN_SOURCE
 #include "db_gen.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#include <time.h>
+#include <unistd.h>
 #include "../../inc/ft_malloc.h"
+#include "../../inc/error_codes.h"
 
 static char *m_str_concat(const char *a, const char *b)
 {
@@ -77,6 +81,26 @@ int db_gen_create_table(DB_ID db, const tableSchema_t *schema)
     rc = db_execute(db, sql, 0, NULL);
     free(sql);
     return rc;
+}
+
+int db_gen_parse_timestamp(const char *timestamp_str)
+{
+    struct tm tm;
+
+    if (timestamp_str == NULL || *timestamp_str == '\0')
+        return 0;
+
+
+    if (strptime(timestamp_str, "%Y-%m-%d %H:%M:%S", &tm) == NULL)
+    {
+        // If the format is not matched, we can try a different format or return an error.
+        // For now, we will just return 0 to indicate failure.
+        return 0;
+    }
+    // if (strptime(timestamp_str, "%Y-%m-%d %H:%M:%S", &tm) == NULL)
+    //     return 0;
+
+    return mktime(&tm);
 }
 
 int db_gen_insert(DB_ID db, const tableSchema_t *schema, ...)
@@ -252,6 +276,115 @@ int db_gen_delete_by_pk(DB_ID db, const tableSchema_t *schema, const char *pk_va
 
     const char *paramValues[1] = { pk_value };
     rc = db_execute(db, sql, 1, paramValues);
+    free(sql);
+    return rc;
+}
+
+int db_gen_update_by_pk(DB_ID db,
+                        const tableSchema_t *schema,
+                        const char *pk_value,
+                        ...)
+{
+    int placeholder;
+    int pk_index;
+    int total;
+    int upd_count;
+    int buf_est;
+    int pos;
+    int more;
+    int i;
+    int j;
+    int rc;
+    va_list ap;
+
+    if (db == INVALID_DB_ID || !schema || schema->n_cols <= 0 || !pk_value)
+        return ERROR;
+
+    pk_index = -1;
+    for (i = 0; i < schema->n_cols; i++)
+    {
+        if (schema->columns[i].is_primary)
+        {
+            pk_index = i;
+            break;
+        }
+    }
+    if (pk_index < 0)
+        return ERROR;
+    
+    total = schema->n_cols;
+    const char **values = malloc(sizeof(char *) * total);
+    
+    va_start(ap, pk_value);
+    for (i = 0; i < total; i++)
+    {
+        if (i == pk_index)
+            values[i] = NULL;
+        else
+            values[i] = va_arg(ap, char *);
+    }
+    va_end(ap);
+
+    upd_count = 0;
+    for (i = 0; i < total; i++)
+    {
+        if (i != pk_index && values[i] != NULL)
+            upd_count++;
+    }
+    if (upd_count == 0)
+    {
+        free(values);
+        return SUCCESS;
+    }
+
+    const char **paramValues = malloc(sizeof(char *) * (upd_count + 1));
+
+    buf_est = 256 + upd_count * 64;
+    char *sql = malloc(buf_est);
+
+    pos = snprintf(sql, buf_est,
+                       "UPDATE %s SET ",
+                       schema->name);
+
+    placeholder = 1;
+    for (i = 0; i < total; i++)
+    {
+        if (i == pk_index || values[i] == NULL) continue;
+
+        pos += snprintf(sql + pos, buf_est - pos,
+                        "%s = $%d",
+                        schema->columns[i].name,
+                        placeholder);
+
+        paramValues[placeholder - 1] = values[i];
+        placeholder++;
+
+        more = 0;
+        for (j = i + 1; j < total; j++)
+        {
+            if (j != pk_index && values[j] != NULL)
+            {
+                more = 1;
+                break;
+            }
+        }
+        if (more)
+        {
+            pos += snprintf(sql + pos, buf_est - pos, ", ");
+        }
+    }
+
+    pos += snprintf(sql + pos, buf_est - pos,
+                    " WHERE %s = $%d;",
+                    schema->columns[pk_index].name,
+                    placeholder);
+
+    paramValues[upd_count] = pk_value;
+
+    rc = db_execute(db, sql, upd_count + 1, paramValues);
+
+    free(values);
+    free(paramValues);
     free(sql);
     return rc;
 }
