@@ -33,25 +33,28 @@ int db_gen_create_table(DB_ID db, const tableSchema_t *schema)
     const char* open_paren = " (";
     const char* close      = ");";
     char buffer[512];
-    int offset, i, rc;
+    int offset;
+    int i;
+    int rc;
+    int pk_count;
+    int first;
 
-    if (db == INVALID_DB_ID || schema == NULL || schema->n_cols <= 0) {
-        return -1;
-    }
-
-    // 1) Count how many columns are marked primary
-    int pk_count = 0;
-    for (i = 0; i < schema->n_cols; i++) {
+    if (db == INVALID_DB_ID || schema == NULL || schema->n_cols <= 0)
+        return ERROR;
+    
+    pk_count = 0;
+    for (i = 0; i < schema->n_cols; i++)
+    {
         if (schema->columns[i].is_primary) pk_count++;
     }
 
-    // 2) Start "CREATE TABLE IF NOT EXISTS <name> ("
     sql = m_str_concat(prefix, schema->name);
     tmp = m_str_concat(sql, open_paren);
     free(sql);
     sql = tmp;
 
-    for (i = 0; i < schema->n_cols; i++) {
+    for (i = 0; i < schema->n_cols; i++)
+    {
         const columnDef_t *col = &schema->columns[i];
         offset = 0;
 
@@ -87,7 +90,7 @@ int db_gen_create_table(DB_ID db, const tableSchema_t *schema)
         free(sql);
         sql = tmp;
 
-        int first = 1;
+        first = 1;
         for (i = 0; i < schema->n_cols; i++)
         {
             if (schema->columns[i].is_primary)
@@ -129,12 +132,8 @@ int db_gen_parse_timestamp(const char *timestamp_str)
 
     if (strptime(timestamp_str, "%Y-%m-%d %H:%M:%S", &tm) == NULL)
     {
-        // If the format is not matched, we can try a different format or return an error.
-        // For now, we will just return 0 to indicate failure.
         return 0;
     }
-    // if (strptime(timestamp_str, "%Y-%m-%d %H:%M:%S", &tm) == NULL)
-    //     return 0;
 
     return mktime(&tm);
 }

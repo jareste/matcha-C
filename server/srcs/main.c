@@ -14,6 +14,7 @@
 #include "db/tables/db_table_like.h"
 #include "db/tables/db_table_message.h"
 #include "db/tables/db_table_notification.h"
+#include "db/tables/db_table_session.h"
 #include "db/db_gen.h"
 
 static bool m_die = false;
@@ -248,6 +249,8 @@ int main()
     if (db_tmessage_init(DB) == ERROR)
         goto error;
     if (db_tnotification_init(DB) == ERROR)
+        goto error;
+    if (db_tsession_init(DB) == ERROR)
         goto error;
     /* DB DONE */
 
