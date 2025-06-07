@@ -6,6 +6,10 @@ SRC = db.c \
 	  tables/db_table_user.c \
 	  tables/db_table_tag.c \
 	  tables/db_table_pic.c \
+	  tables/db_table_visit.c \
+	  tables/db_table_like.c \
+	  tables/db_table_message.c \
+	  tables/db_table_notification.c \
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs

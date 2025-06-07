@@ -10,6 +10,10 @@
 #include "db/tables/db_table_user.h"
 #include "db/tables/db_table_tag.h"
 #include "db/tables/db_table_pic.h"
+#include "db/tables/db_table_visit.h"
+#include "db/tables/db_table_like.h"
+#include "db/tables/db_table_message.h"
+#include "db/tables/db_table_notification.h"
 #include "db/db_gen.h"
 
 static bool m_die = false;
@@ -186,14 +190,15 @@ static int m_foo_instert_db_users(DB_ID db)
     db_tpicture_free_array(all);
 
     picture_t_array *u1 = db_tpicture_select_for_user(db, 1);
-    for (size_t i = 0; i < all->count; i++)
+    for (size_t i = 0; i < u1->count; i++)
     {
-        picture_t *pic = all->pictures[i];
+        picture_t *pic = u1->pictures[i];
+
         printf("Picture %d: User ID: %d, File Path: %s, Is Profile: %s, Uploaded At: %s\n",
                pic->id, pic->user_id, pic->file_path,
                pic->is_profile ? "Yes" : "No", ctime(&pic->uploaded_at));
     }
-    printf("Total pictures: %zu\n", all->count);
+    printf("Total pictures: %zu\n", u1->count);
 
     db_tpicture_free_array(u1);
 
@@ -232,10 +237,17 @@ int main()
 
     if (db_tuser_init(DB) == ERROR)
         goto error;
-
     if (db_ttag_init(DB) == ERROR)
         goto error;
     if (db_tpicture_init(DB) == ERROR)
+        goto error;
+    if (db_tvisit_init(DB) == ERROR)
+        goto error;
+    if (db_tlike_init(DB) == ERROR)
+        goto error;
+    if (db_tmessage_init(DB) == ERROR)
+        goto error;
+    if (db_tnotification_init(DB) == ERROR)
         goto error;
     /* DB DONE */
 
