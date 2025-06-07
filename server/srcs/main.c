@@ -9,6 +9,7 @@
 #include "db/db_api.h"
 #include "db/tables/db_table_user.h"
 #include "db/tables/db_table_tag.h"
+#include "db/tables/db_table_pic.h"
 #include "db/db_gen.h"
 
 static bool m_die = false;
@@ -130,7 +131,6 @@ static int m_foo_instert_db_users(DB_ID db)
     db_ttag_insert_tag(db, "music");
     db_ttag_insert_tag(db, "music");
 
-    // List all tags:
     tag_t_array *tags = db_ttag_select_all_tags(db);
     for (size_t i = 0; i < tags->count; i++) {
         printf("Tag %d: %s\n", tags->tags[i]->id, tags->tags[i]->name);
@@ -138,7 +138,6 @@ static int m_foo_instert_db_users(DB_ID db)
     printf("Total tags: %zu\n", tags->count);
     db_ttag_free_array(tags);
 
-    // Update a tag:
     tag_t* tag;
     db_ttag_select_tag_by_name(db, "music", &tag);
     printf("Updating tag with ID %d to 'art'\n", tag->id);
@@ -152,15 +151,12 @@ static int m_foo_instert_db_users(DB_ID db)
     db_ttag_free_array(tags);
 
 
-    // Delete a tag:
     printf("Deleting tag with ID 1\n");
     db_ttag_delete_tag_from_pk(db, 2);
 
-    // Map user 1 ↔ tag 7:
     printf("Mapping user 1 to tag 7\n");
     db_ttag_insert_user_tag(db, 1, 7);
 
-    // Fetch tags for user 1:
     printf("Fetching tags for user 1\n");
     user_tag_array *maps = db_ttag_select_tags_for_user(db, 1);
     printf("\nUser 1's tags:%zu\n", maps->count);
@@ -173,6 +169,38 @@ static int m_foo_instert_db_users(DB_ID db)
     db_ttag_free_map_array(maps);
 
     db_ttag_delete_user_tag(db, 1, 7);
+
+
+    db_tpicture_insert_picture(db, 1, "/uploads/img1.png", true);
+
+    picture_t_array *all = db_tpicture_select_all(db);
+    for (size_t i = 0; i < all->count; i++)
+    {
+        picture_t *pic = all->pictures[i];
+        printf("Picture %d: User ID: %d, File Path: %s, Is Profile: %s, Uploaded At: %s\n",
+               pic->id, pic->user_id, pic->file_path,
+               pic->is_profile ? "Yes" : "No", ctime(&pic->uploaded_at));
+    }
+    printf("Total pictures: %zu\n", all->count);
+
+    db_tpicture_free_array(all);
+
+    picture_t_array *u1 = db_tpicture_select_for_user(db, 1);
+    for (size_t i = 0; i < all->count; i++)
+    {
+        picture_t *pic = all->pictures[i];
+        printf("Picture %d: User ID: %d, File Path: %s, Is Profile: %s, Uploaded At: %s\n",
+               pic->id, pic->user_id, pic->file_path,
+               pic->is_profile ? "Yes" : "No", ctime(&pic->uploaded_at));
+    }
+    printf("Total pictures: %zu\n", all->count);
+
+    db_tpicture_free_array(u1);
+
+    picture_t pic = { .id=1, .user_id=1, .file_path="/uploads/new.png", .is_profile=false };
+    db_tpicture_update_picture(db, &pic);
+
+    db_tpicture_delete_picture_from_pk(db, 5);
 
     return SUCCESS;
 }
@@ -206,6 +234,8 @@ int main()
         goto error;
 
     if (db_ttag_init(DB) == ERROR)
+        goto error;
+    if (db_tpicture_init(DB) == ERROR)
         goto error;
     /* DB DONE */
 
