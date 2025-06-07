@@ -3,16 +3,19 @@ NAME = matCha
 #########
 RM = rm -rf
 CC = cc
-CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL -lpthread -lpq #-DDEBUG
+CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=thread -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
+# POSTGRESS_LIB = -lpq
+POSTGRESS_LIB = -L$(HOME)/postgresql/lib -lpq
+#########
 LDFLAGS =	-Lsrcs/log -llog \
 			-Lsrcs/parse -lparse \
 			-Lsrcs/server -lserver \
 			-Lsrcs/router -lrouter \
 			-Lsrcs/mail -lmail \
 			-Lsrcs/db -ldb \
-			-L$(OPENSSL_BUILD_DIR)/lib -lssl -lcrypto -lpthread -lm -ldl -lpq
+			-lpthread -lm -ldl $(POSTGRESS_LIB)
 RELEASE_CFLAGS = -Werror -Wextra -Wall -g -O3
 
 LIB_DIRS := log parse server router mail db
@@ -128,11 +131,12 @@ db_up:
 
 db_down:
 	@echo "Stopping the database using Docker Compose..."
-	@docker compose -f ../BBDD/docker-compose.yml down
+	@docker compose -f ../BBDD/docker-compose.yml down || true
 	@echo "Database has been stopped."
 
 db_clean:
-	@docker volume rm bbdd_postgres_data
+	@docker volume rm bbdd_postgres_data || true
+	@docker system prune -af || true
 
 db_reset: db_down db_clean db_up
 	@echo "Database has been reset."

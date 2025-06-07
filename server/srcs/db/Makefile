@@ -8,6 +8,9 @@ SRC = db.c \
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs
 OBJ_DIR = objs
+
+CFLAGS += -I../../inc -I/usr/include/postgresql -I$(HOME)/postgresql/include
+
 all: $(NAME)
 
 $(NAME): $(OBJ)
@@ -16,7 +19,7 @@ $(NAME): $(OBJ)
 $(OBJ_DIR)/%.o: %.c
 	@mkdir -p $(@D)
 	echo "Compiling $< to $@"
-	$(CC) $(CFLAGS) -I../../inc -I/usr/include/postgresql -c $< -o $@ -lpq
+	$(CC) $(CFLAGS) -c $< -o $@
 
 clean:
 	$(RM) -rf $(OBJ_DIR)
