@@ -1,4 +1,4 @@
-NAME = truco
+NAME = matCha
 
 #########
 RM = rm -rf
