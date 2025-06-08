@@ -137,7 +137,6 @@ db_down:
 
 db_clean:
 	@docker volume rm bbdd_postgres_data || true
-	@docker system prune -af || true
 
 db_reset: db_down db_clean db_up
 	@echo "Database has been reset."
@@ -149,5 +148,11 @@ docker_start:
 	@echo "Starting Docker..."
 	@service docker start || true
 	@echo "Docker is running."
+
+docker_clean:
+	@echo "Cleaning up Docker..."
+	@docker system prune -af || true
+	@docker volume prune -f || true
+	@echo "Docker cleanup complete."
 
 -include $(DEP)

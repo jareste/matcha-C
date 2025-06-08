@@ -110,7 +110,7 @@ session_t_array* db_tsession_select_for_user(DB_ID DB, int user_id)
     arr->sessions  = ss;
     arr->count     = n;
     arr->pg_result = res;
-    for (int i = 0; i < n; i++)
+    for (i = 0; i < n; i++)
     {
         ss[i] = make_session_from_row(res, i);
     }

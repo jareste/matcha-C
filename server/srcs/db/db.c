@@ -21,16 +21,11 @@ DB_ID db_connect(const char *conninfo)
     PGconn *conn;
 
     if (!conninfo)
-    {
-        fprintf(stderr, "[db_connect] ERROR: conninfo is NULL\n");
         return INVALID_DB_ID;
-    }
 
     conn = PQconnectdb(conninfo);
     if (PQstatus(conn) != CONNECTION_OK)
     {
-        fprintf(stderr, "[db_connect] Connection to database failed: %s\n",
-                PQerrorMessage(conn));
         PQfinish(conn);
         return INVALID_DB_ID;
     }
@@ -44,11 +39,7 @@ int db_execute(DB_ID db, const char *sql, int nParams, const char *const *paramV
     PGresult* res;
     ExecStatusType status;
 
-    if ((db == INVALID_DB_ID) || !sql)
-    {
-        fprintf(stderr, "[db_execute] Invalid arguments\n");
-        return -1;
-    }
+    if ((db == INVALID_DB_ID) || !sql) return ERROR;
 
     conn = m_db_id_to_PGconn(db);
 
@@ -64,22 +55,17 @@ int db_execute(DB_ID db, const char *sql, int nParams, const char *const *paramV
     );
 
     if (!res)
-    {
-        fprintf(stderr, "[db_execute] PQexecParams returned NULL: %s\n",
-                PQerrorMessage(conn));
-        return -1;
-    }
+        return ERROR;
 
     status = PQresultStatus(res);
     if (status != PGRES_COMMAND_OK)
     {
-        fprintf(stderr, "[db_execute] SQL error: %s\n", PQerrorMessage(conn));
         PQclear(res);
-        return -1;
+        return ERROR;
     }
 
     PQclear(res);
-    return 0;
+    return SUCCESS;
 }
 
 PGresult *db_query(DB_ID db, const char *sql, int nParams, const char *const *paramValues)
@@ -88,11 +74,7 @@ PGresult *db_query(DB_ID db, const char *sql, int nParams, const char *const *pa
     PGresult* res;
     ExecStatusType status;
 
-    if (!db || !sql)
-    {
-        fprintf(stderr, "[db_query] Invalid arguments\n");
-        return NULL;
-    }
+    if (!db || !sql) return NULL;
 
     conn = m_db_id_to_PGconn(db);
 
@@ -107,17 +89,11 @@ PGresult *db_query(DB_ID db, const char *sql, int nParams, const char *const *pa
         0
     );
 
-    if (!res)
-    {
-        fprintf(stderr, "[db_query] PQexecParams returned NULL: %s\n",
-                PQerrorMessage(conn));
-        return NULL;
-    }
+    if (!res) return NULL;
 
     status = PQresultStatus(res);
     if (status != PGRES_TUPLES_OK)
     {
-        fprintf(stderr, "[db_query] Query failed: %s\n", PQerrorMessage(conn));
         PQclear(res);
         return NULL;
     }
@@ -128,9 +104,7 @@ PGresult *db_query(DB_ID db, const char *sql, int nParams, const char *const *pa
 void db_clear_result(PGresult *res)
 {
     if (res)
-    {
         PQclear(res);
-    }
 }
 
 void db_close(DB_ID db)
@@ -142,9 +116,7 @@ void db_close(DB_ID db)
     
     conn = m_db_id_to_PGconn(db);
     if (conn)
-    {
         PQfinish(conn);
-    }
 }
 
 int db_init(DB_ID* DB, char* host, char* port,\
@@ -158,9 +130,7 @@ int db_init(DB_ID* DB, char* host, char* port,\
 
     *DB = db_connect(conninfo);
     if (*DB == INVALID_DB_ID)
-    {
         return ERROR;
-    }
 
     return SUCCESS;
 }

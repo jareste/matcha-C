@@ -49,164 +49,29 @@ int main_loop()
     return 0;
 }
 
-/* TEST */
-static int m_foo_instert_db_users(DB_ID db)
+static int m_init_dbs(DB_ID *DB)
 {
-    user_t users[] = {
-        {
-            .username = "alice99",
-            .email = "alice@alice.com",
-            .password_hash = "hashed_pw_123",
-            .first_name = "Alice",
-            .last_name = "Anderson",
-            .gender = "Female",
-            .orientation = "Bisexual",
-            .bio = "Hello, I'm Alice!",
-            .fame_rating = 42,
-            .gps_lat = 37.7749,
-            .gps_lon = -122.4194,
-            .location_optout = false,
-            .last_online = "2025-06-03 14:22:00+00",
-            .created_at = 0
-        },
-        {
-            .username = "bob",
-            .email = "alicer@ralice.com",
-            .password_hash = "hashed_pw_123",
-            .first_name = "Aliece",
-            .last_name = "Andereson",
-            .gender = "Femaledas",
-            .orientation = "Bisedasxual",
-            .bio = "Hello, I'm Alicdasdae!",
-            .fame_rating = 422312,
-            .gps_lat = 3721.7741119,
-            .gps_lon = -1221.4194,
-            .location_optout = false,
-            .last_online = "2025-06-03 14:22:00+00",
-            .created_at = 0
-        },
-    };
- 
-    for (int i = 0; i < (int)(sizeof(users) / sizeof(users[0])); i++)
-    {
-        if (db_tuser_insert_user(db, &users[i]) != SUCCESS)
-        {
-            fprintf(stderr, "ERROR: Failed to insert user '%s'\n", users[i].username);
-            return ERROR;
-        }
-        printf("✅ Inserted user '%s'\n", users[i].username);
-    }
+    db_config db_config;
+    parse_set_db_config(&db_config);
+    if (db_init(DB, db_config.DB_HOST, db_config.DB_PORT, db_config.DB_USER, db_config.DB_PASSWORD, db_config.DB_NAME) == ERROR)
+        return ERROR;
 
-    user_t_array *all_users = db_tuser_select_all_users(db);
-    printf("\n👥 All users in the database:\n");
-    for (size_t i = 0; i < all_users->count; i++)
-    {
-        user_t *user = all_users->users[i];
-        printf("User %d: %s,\n Email: %s,\n Fame Rating: %d\n"
-               "First Name: %s,\n Last Name: %s,\n"
-               "Bio: %s,\n Location Opt-out: %s,\n"
-               "Last Online: %s,\n Created At: %s\n"
-               "Gender: %s,\n Orientation: %s\n"
-               "GPS: (%f, %f)\n"
-               "email_verified: %s\n"
-               "----------------------------------------\n",
-               user->id, user->username, user->email, user->fame_rating,
-               user->first_name, user->last_name, user->bio,
-               user->location_optout ? "Yes" : "No",
-               user->last_online, ctime(&user->created_at),
-               user->gender, user->orientation,
-               user->gps_lat, user->gps_lon,
-               user->email_verified ? "Yes" : "No");
-    }
-
-    db_tuser_free_array(all_users);
-
-    db_tuser_delete_user_from_pk(db, "bob");
-
-    all_users = db_tuser_select_all_users(db);
-    printf("\n👥 All users in the database:\n");
-    for (size_t i = 0; i < all_users->count; i++)
-    {
-        user_t *user = all_users->users[i];
-        printf("User %d: %s, Email: %s, Fame Rating: %d\n", user->id, user->username, user->email, user->fame_rating);
-    }
-
-    db_tuser_free_array(all_users);
-
-    db_ttag_insert_tag(db, "music");
-    db_ttag_insert_tag(db, "music");
-
-    tag_t_array *tags = db_ttag_select_all_tags(db);
-    for (size_t i = 0; i < tags->count; i++) {
-        printf("Tag %d: %s\n", tags->tags[i]->id, tags->tags[i]->name);
-    }
-    printf("Total tags: %zu\n", tags->count);
-    db_ttag_free_array(tags);
-
-    tag_t* tag;
-    db_ttag_select_tag_by_name(db, "music", &tag);
-    printf("Updating tag with ID %d to 'art'\n", tag->id);
-    db_ttag_update_tag(db, tag->id, "art");
-
-    tags = db_ttag_select_all_tags(db);
-    for (size_t i = 0; i < tags->count; i++) {
-        printf("Tag %d: %s\n", tags->tags[i]->id, tags->tags[i]->name);
-    }
-    printf("Total tags: %zu\n", tags->count);
-    db_ttag_free_array(tags);
-
-
-    printf("Deleting tag with ID 1\n");
-    db_ttag_delete_tag_from_pk(db, 2);
-
-    printf("Mapping user 1 to tag 7\n");
-    db_ttag_insert_user_tag(db, 1, 7);
-
-    printf("Fetching tags for user 1\n");
-    user_tag_array *maps = db_ttag_select_tags_for_user(db, 1);
-    printf("\nUser 1's tags:%zu\n", maps->count);
-    for (size_t i = 0; i < maps->count; i++) {
-        printf("User %d has tag %d\n",
-            maps->mappings[i]->user_id,
-            maps->mappings[i]->tag_id);
-    }
-    printf("Total mappings for user 1: %zu\n", maps->count);
-    db_ttag_free_map_array(maps);
-
-    db_ttag_delete_user_tag(db, 1, 7);
-
-
-    db_tpicture_insert_picture(db, 1, "/uploads/img1.png", true);
-
-    picture_t_array *all = db_tpicture_select_all(db);
-    for (size_t i = 0; i < all->count; i++)
-    {
-        picture_t *pic = all->pictures[i];
-        printf("Picture %d: User ID: %d, File Path: %s, Is Profile: %s, Uploaded At: %s\n",
-               pic->id, pic->user_id, pic->file_path,
-               pic->is_profile ? "Yes" : "No", ctime(&pic->uploaded_at));
-    }
-    printf("Total pictures: %zu\n", all->count);
-
-    db_tpicture_free_array(all);
-
-    picture_t_array *u1 = db_tpicture_select_for_user(db, 1);
-    for (size_t i = 0; i < u1->count; i++)
-    {
-        picture_t *pic = u1->pictures[i];
-
-        printf("Picture %d: User ID: %d, File Path: %s, Is Profile: %s, Uploaded At: %s\n",
-               pic->id, pic->user_id, pic->file_path,
-               pic->is_profile ? "Yes" : "No", ctime(&pic->uploaded_at));
-    }
-    printf("Total pictures: %zu\n", u1->count);
-
-    db_tpicture_free_array(u1);
-
-    picture_t pic = { .id=1, .user_id=1, .file_path="/uploads/new.png", .is_profile=false };
-    db_tpicture_update_picture(db, &pic);
-
-    db_tpicture_delete_picture_from_pk(db, 5);
+    if (db_tuser_init(*DB) == ERROR)
+        return ERROR;
+    if (db_ttag_init(*DB) == ERROR)
+        return ERROR;
+    if (db_tpicture_init(*DB) == ERROR)
+        return ERROR;
+    if (db_tvisit_init(*DB) == ERROR)
+        return ERROR;
+    if (db_tlike_init(*DB) == ERROR)
+        return ERROR;
+    if (db_tmessage_init(*DB) == ERROR)
+        return ERROR;
+    if (db_tnotification_init(*DB) == ERROR)
+        return ERROR;
+    if (db_tsession_init(*DB) == ERROR)
+        return ERROR;
 
     return SUCCESS;
 }
@@ -215,7 +80,6 @@ int main()
 {
     ssl_config ssl_config;
     log_config log_config;
-    db_config db_config;
     DB_ID DB;
 
     if (parse_config("config") == ERROR)
@@ -225,39 +89,13 @@ int main()
     log_init(log_config.LOG_FILE_PATH, log_config.LOG_ERASE, log_config.LOG_LEVEL);
 
     parse_set_ssl_config(&ssl_config);
-    /* On failure will simply exit soooo :) */
     if (server_init(ssl_config.PORT) == ERROR)
         goto error;
 
     server_set_http_request_handler(m_http_request_handler);
 
-    /* INIT DBs */
-    parse_set_db_config(&db_config);
-    if (db_init(&DB, db_config.DB_HOST, db_config.DB_PORT, db_config.DB_USER, db_config.DB_PASSWORD, db_config.DB_NAME) == ERROR)
+    if (m_init_dbs(&DB) == ERROR)
         goto error;
-
-    if (db_tuser_init(DB) == ERROR)
-        goto error;
-    if (db_ttag_init(DB) == ERROR)
-        goto error;
-    if (db_tpicture_init(DB) == ERROR)
-        goto error;
-    if (db_tvisit_init(DB) == ERROR)
-        goto error;
-    if (db_tlike_init(DB) == ERROR)
-        goto error;
-    if (db_tmessage_init(DB) == ERROR)
-        goto error;
-    if (db_tnotification_init(DB) == ERROR)
-        goto error;
-    if (db_tsession_init(DB) == ERROR)
-        goto error;
-    /* DB DONE */
-
-    /* TEST */
-    if (m_foo_instert_db_users(DB) == ERROR)
-        goto error;
-    /* TEST_END */
 
     parse_free_config(); /* init config */
 

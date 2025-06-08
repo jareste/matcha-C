@@ -76,6 +76,17 @@ void parse_set_db_config(db_config* db)
 
 void parse_free_config()
 {
+    free(m_config_content->LOG_FILE_PATH);
+
+    free(m_config_content->CERT_PATH);
+    free(m_config_content->KEY_PATH);
+
+    free(m_config_content->DB_HOST);
+    free(m_config_content->DB_PORT);
+    free(m_config_content->DB_USER);
+    free(m_config_content->DB_PASSWORD);
+    free(m_config_content->DB_NAME);
+
     free(m_config_content);
     m_config_content = NULL;
 }
