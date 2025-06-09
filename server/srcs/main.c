@@ -16,6 +16,7 @@
 #include "db/tables/db_table_notification.h"
 #include "db/tables/db_table_session.h"
 #include "db/db_gen.h"
+#include "../third_party/cJSON/cJSON.h"
 
 static bool m_die = false;
 

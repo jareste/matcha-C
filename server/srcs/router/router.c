@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -184,6 +185,50 @@ int router_parse_http_request(const char* request, size_t request_len, char** me
     return SUCCESS;
 }
 
+static char* get_header_value(const char *req, const char *key)
+{
+    char* p;
+    char* end;
+    char* out;
+    size_t len;
+    
+    p = strcasestr(req, key);
+
+    if (!p) return NULL;
+    p = strchr(p, ':');
+    if (!p) return NULL;
+    
+    p++;
+    while (*p==' '||*p=='\t') p++;
+
+    end = strstr(p, "\r\n");
+    if (!end) return NULL;
+
+    len = end - p;
+    out = malloc(len+1);
+    memcpy(out, p, len);
+    out[len]='\0';
+    return out;
+}
+
+static void send_cors_preflight(int fd, const char *origin)
+{
+    char buf[512];
+    int n;
+    
+    n = snprintf(buf, sizeof(buf),
+        "HTTP/1.1 204 No Content\r\n"
+        "Access-Control-Allow-Origin: %s\r\n"
+        "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
+        "Access-Control-Allow-Headers: Content-Type\r\n"
+        "Access-Control-Allow-Credentials: true\r\n"
+        "Content-Length: 0\r\n"
+        "\r\n",
+        origin
+    );
+    write(fd, buf, n);
+}
+
 int router_handle_http_request(int fd, const char* request, size_t request_len)
 {
     const char* route = NULL;
@@ -194,6 +239,8 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     size_t first_line_len = 0;
     route_entry_t* route_entry = NULL;
     http_request_ctx_t request_ctx;
+    char* origin;
+    char* method = NULL;
 
     first_line_end = strstr(request, "\r\n");
     if (first_line_end)
@@ -204,6 +251,7 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
         space_pos = strchr(first_line, ' ');
         if (space_pos)
         {
+            method = first_line;
             *space_pos = '\0';
             route = space_pos + 1;
 
@@ -222,6 +270,24 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
 
     if (!route_entry->handler)
         return router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}");
+
+    origin = get_header_value(request, "Origin");
+    if (!origin) origin = strdup("http://localhost:8000"); /* error instead ? */
+
+    if (!method)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to parse method from request\n");
+        free(origin);
+        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}");
+    }
+
+    if (strcmp(method, "OPTIONS")==0)
+    {
+        log_msg(LOG_LEVEL_DEBUG, "CORS preflight for %s\n", route);
+        send_cors_preflight(fd, origin);
+        free(origin);
+        return SUCCESS;
+    }
 
     /* Populate request ctx */
     request_ctx.fd = fd;

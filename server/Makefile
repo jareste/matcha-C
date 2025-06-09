@@ -16,7 +16,9 @@ LDFLAGS =	-Lsrcs/log -llog \
 			-Lsrcs/router -lrouter \
 			-Lsrcs/mail -lmail \
 			-Lsrcs/db -ldb \
-			-lpthread -lm -ldl $(POSTGRESS_LIB)
+			-lpthread -lm -ldl $(POSTGRESS_LIB)\
+			-L$(cJSON_DIR) -lcjson
+
 RELEASE_CFLAGS = -Werror -Wextra -Wall -g -O3
 
 LIB_DIRS := log parse server router mail db
@@ -27,6 +29,11 @@ LIB_NAMES := $(foreach dir,$(LIB_DIRS),srcs/$(dir)/lib$(dir).a)
 
 SUBMAKE = $(MAKE) --silent -C
 #########
+
+cJSON_DIR = third_party/cJSON
+cJSON_SRC = $(cJSON_DIR)/cJSON.c $(cJSON_DIR)/cJSON_Utils.c
+cJSON_OBJ = $(cJSON_DIR)/objs/cJSON.o $(cJSON_DIR)/objs/cJSON_Utils.o
+cJSON_LIB = $(cJSON_DIR)/libcjson.a
 
 #########
 FILES = main  ft_list ft_malloc
@@ -58,7 +65,7 @@ $(OBJ_DIR)/%.o: %.c
 	${CC} -MMD $(CFLAGS) -c $< -o $@
 
 
-all: .gitignore create_cert build_libs
+all: .gitignore create_cert build_libs build_cjson
 	@echo "\033[1;32mBuilding $(NAME)...\033[0m"
 	@$(MAKE) $(NAME)
 
@@ -72,6 +79,16 @@ build_libs:
 		echo "\033[1;32mBuilding library in $$dir...\033[0m"; \
 		$(SUBMAKE) $$dir; \
 	done
+
+$(cJSON_LIB): $(cJSON_SRC)
+	@echo "\033[1;32mBuilding cJSON...\033[0m"
+	@mkdir -p $(cJSON_DIR)/objs
+	@$(CC) $(CFLAGS) -c $(cJSON_DIR)/cJSON.c -o $(cJSON_DIR)/objs/cJSON.o
+	@$(CC) $(CFLAGS) -c $(cJSON_DIR)/cJSON_Utils.c -o $(cJSON_DIR)/objs/cJSON_Utils.o
+	@ar rcs $(cJSON_LIB) $(cJSON_OBJ)
+	@echo "cJSON built successfully."
+
+build_cjson: $(cJSON_LIB)
 
 release: CFLAGS = $(RELEASE_CFLAGS)
 release: re
