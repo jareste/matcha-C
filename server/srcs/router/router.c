@@ -20,6 +20,7 @@ static const char* m_http_code_to_status_text(HTTP_response_code_t code)
         case CODE_201_CREATED: return "Created";
         case CODE_204_NO_CONTENT: return "No Content";
         case CODE_400_BAD_REQUEST: return "Bad Request";
+        case CODE_403_FORBIDDEN: return "Forbidden";
         case CODE_404_NOT_FOUND: return "Not Found";
         case CODE_405_METHOD_NOT_ALLOWED: return "Method Not Allowed";
         case CODE_500_INTERNAL_SERVER_ERROR: return "Internal Server Error";
@@ -28,13 +29,18 @@ static const char* m_http_code_to_status_text(HTTP_response_code_t code)
     }
 }
 
-int router_http_generate_response(int fd, HTTP_response_code_t code, const char* body)
+int router_http_generate_response(int fd, HTTP_response_code_t code, const char* body, const char* origin)
 {
     char body_buf[128];
     char header[512];
     size_t body_len;
     const char* status_text;
     int header_len;
+
+    if (!origin)
+    {
+        origin = "http://localhost:8000";
+    }
 
     if (code == CODE_204_NO_CONTENT)
     {
@@ -50,12 +56,13 @@ int router_http_generate_response(int fd, HTTP_response_code_t code, const char*
         header_len = snprintf(header, sizeof(header),
             "HTTP/1.1 %d %s\r\n"
             "Content-Type: application/json\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
+            "Access-Control-Allow-Origin: %s\r\n"
+            "Access-Control-Allow-Credentials: true\r\n"
             "Access-Control-Allow-Methods: POST\r\n"
             "Access-Control-Allow-Headers: Content-Type\r\n"
             "Content-Length: %zu\r\n"
             "Connection: close\r\n\r\n",
-            code, status_text, body_len);
+            code, status_text, origin, body_len);
 
         if (header_len <= 0 || (size_t)header_len >= sizeof(header))
         {
@@ -75,12 +82,13 @@ int router_http_generate_response(int fd, HTTP_response_code_t code, const char*
         header_len = snprintf(header, sizeof(header),
             "HTTP/1.1 %d %s\r\n"
             "Content-Type: application/json\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
+            "Access-Control-Allow-Origin: %s\r\n"
+            "Access-Control-Allow-Credentials: true\r\n"
             "Access-Control-Allow-Methods: POST\r\n"
             "Access-Control-Allow-Headers: Content-Type\r\n"
             "Content-Length: %zu\r\n"
             "Connection: close\r\n\r\n",
-            code, status_text, body_len);
+            code, status_text, origin, body_len);
 
         if (header_len <= 0 || (size_t)header_len >= sizeof(header))
         {
@@ -96,13 +104,14 @@ int router_http_generate_response(int fd, HTTP_response_code_t code, const char*
     return SUCCESS;
 }
 
-void router_add(const char* path, route_cb_t cb, void* user_data)
+void router_add(const char* path, route_cb_t cb, void* user_data, http_request_flags_t flags)
 {
     route_entry_t* entry = malloc(sizeof(*entry));
 
     entry->path = strdup(path);
     entry->handler = cb;
     entry->user_data = user_data;
+    entry->flags = flags;
     HASH_ADD_KEYPTR(hh, m_routes, entry->path, strlen(entry->path), entry);
 }
 
@@ -134,7 +143,7 @@ void router_clear()
     }
 }
 
-int router_parse_http_request(const char* request, size_t request_len, char** method, char** route, char** headers, char** body)
+int router_parse_http_request(const char* request, size_t request_len, http_request_t* out_request)
 {
     const char* first_line_end;
     const char* line_start;
@@ -146,7 +155,7 @@ int router_parse_http_request(const char* request, size_t request_len, char** me
     size_t headers_len;
     size_t line_len;
 
-    if (!request || request_len == 0 || !method || !route || !headers || !body)
+    if (!request || (request_len == 0) || !out_request)
         return ERROR;
 
     first_line_end = strstr(request, "\r\n");
@@ -161,28 +170,38 @@ int router_parse_http_request(const char* request, size_t request_len, char** me
     if (!space1 || space1 >= line_end)
         return ERROR;
 
-    *method = strndup(line_start, space1 - line_start);
+    out_request->method = strndup(line_start, space1 - line_start);
 
     space2 = memchr(space1 + 1, ' ', line_end - space1 - 1);
     if (!space2 || space2 >= line_end)
         return ERROR;
 
-    *route = strndup(space1 + 1, space2 - (space1 + 1));
+    out_request->route = strndup(space1 + 1, space2 - (space1 + 1));
 
     headers_end = strstr(first_line_end + 2, "\r\n\r\n");
     if (!headers_end)
         return ERROR;
 
     headers_len = headers_end - (first_line_end + 2);
-    *headers = strndup(first_line_end + 2, headers_len);
+    out_request->headers = strndup(first_line_end + 2, headers_len);
 
     body_start = headers_end + 4;
     if ((size_t)(body_start - request) < request_len)
-        *body = strndup(body_start, request + request_len - body_start);
+        out_request->body = strndup(body_start, request + request_len - body_start);
     else
-        *body = NULL;
+        out_request->body = NULL;
 
     return SUCCESS;
+}
+
+void free_http_request(http_request_t* request)
+{
+    if (!request) return;
+
+    free(request->method);
+    free(request->route);
+    free(request->headers);
+    free(request->body);
 }
 
 static char* get_header_value(const char *req, const char *key)
@@ -235,7 +254,9 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     const char* first_line_end = NULL;
     char first_line[256] = {0};
     char* space_pos = NULL;
-    char *route_end = NULL;
+    char* route_end = NULL;
+    char* cookies = NULL;
+    char* auth_cookie = NULL;
     size_t first_line_len = 0;
     route_entry_t* route_entry = NULL;
     http_request_ctx_t request_ctx;
@@ -262,14 +283,14 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     }
 
     if (!route)
-        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}");
+        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}", NULL);
 
     route_entry = router_find(route);
     if (!route_entry)
-        return router_http_generate_response(fd, CODE_404_NOT_FOUND, "{\"error\": \"Not Found\"}");
+        return router_http_generate_response(fd, CODE_404_NOT_FOUND, "{\"error\": \"Not Found\"}", NULL);
 
     if (!route_entry->handler)
-        return router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}");
+        return router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}", NULL);
 
     origin = get_header_value(request, "Origin");
     if (!origin) origin = strdup("http://localhost:8000"); /* error instead ? */
@@ -278,7 +299,7 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     {
         log_msg(LOG_LEVEL_ERROR, "Failed to parse method from request\n");
         free(origin);
-        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}");
+        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}", NULL);
     }
 
     if (strcmp(method, "OPTIONS")==0)
@@ -287,6 +308,20 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
         send_cors_preflight(fd, origin);
         free(origin);
         return SUCCESS;
+    }
+
+    if (route_entry->flags & AUTH_REQUIRED)
+    {
+        cookies = get_header_value(request, "Cookie");
+        auth_cookie = strstr(cookies, "token=");
+        if (!auth_cookie)
+        {
+            free(cookies);
+            free(origin);
+            return router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        }
+        /* TODO validate auth_cookie */
+        free(cookies);
     }
 
     /* Populate request ctx */

@@ -6,6 +6,7 @@
 #include "server/server_api.h"
 #include "router/router_api.h"
 #include "mail/mail_api.h"
+#include "api/api.h"
 #include "db/db_api.h"
 #include "db/tables/db_table_user.h"
 #include "db/tables/db_table_tag.h"
@@ -19,6 +20,12 @@
 #include "../third_party/cJSON/cJSON.h"
 
 static bool m_die = false;
+DB_ID m_DB;
+
+DB_ID get_db_id()
+{
+    return m_DB;
+}
 
 void signal_handler(int signum)
 {
@@ -81,8 +88,7 @@ int main()
 {
     ssl_config ssl_config;
     log_config log_config;
-    DB_ID DB;
-
+    
     if (parse_config("config") == ERROR)
             goto error;
 
@@ -95,9 +101,11 @@ int main()
 
     server_set_http_request_handler(m_http_request_handler);
 
-    if (m_init_dbs(&DB) == ERROR)
+    if (m_init_dbs(&m_DB) == ERROR)
         goto error;
 
+    api_init();
+    
     parse_free_config(); /* init config */
 
     /* if server closes us something weird could happen */

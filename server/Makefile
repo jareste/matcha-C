@@ -16,12 +16,13 @@ LDFLAGS =	-Lsrcs/log -llog \
 			-Lsrcs/router -lrouter \
 			-Lsrcs/mail -lmail \
 			-Lsrcs/db -ldb \
+			-Lsrcs/api -lapi \
 			-lpthread -lm -ldl $(POSTGRESS_LIB)\
 			-L$(cJSON_DIR) -lcjson
 
 RELEASE_CFLAGS = -Werror -Wextra -Wall -g -O3
 
-LIB_DIRS := log parse server router mail db
+LIB_DIRS := log parse server router mail db api
 LIB_PATHS := $(addprefix srcs/, $(LIB_DIRS))
 LIBS := $(addprefix -l, $(LIB_DIRS))
 LIBFLAGS := $(addprefix -Lsrcs/, $(LIB_DIRS))
@@ -106,6 +107,7 @@ fclean: clean
 	@make --silent -C srcs/router fclean
 	@make --silent -C srcs/mail fclean
 	@make --silent -C srcs/db fclean
+	@make --silent -C srcs/api fclean
 	@$(RM) $(NAME)
 	@cd $(OPENSSL_SRC_DIR) 2>/dev/null && [ -f Makefile ] && make clean || true
 	@rm -rf $(OPENSSL_INSTALL_DIR)

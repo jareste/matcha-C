@@ -5,6 +5,7 @@ function apiPost(path, data)
   return fetch(`${API_BASE}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
     body: JSON.stringify(data)
   })
   .then(r => {
