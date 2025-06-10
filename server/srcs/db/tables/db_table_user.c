@@ -213,7 +213,6 @@ int db_select_user_by_email(DB_ID DB, const char* email, user_t** user)
     return SUCCESS;
 }
 
-
 int db_tuser_delete_user_from_pk(DB_ID DB, const char* name)
 {
     char* id;

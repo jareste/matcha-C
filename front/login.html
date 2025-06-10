@@ -69,15 +69,26 @@
           password: form.password.value
         })
         .then(res => {
-          if (res.success) {
-            window.location.href = 'index.html';
-          } else {
-            loginMessage.textContent = res.error || 'Login failed';
+          if (res)
+          {
+            if (res.success)
+            {
+              window.location.href = 'index.html';
+            }
+            else
+            {
+              loginMessage.textContent = res.error || 'Login failed';
+              loginMessage.className = 'text-danger';
+            }
+          }
+          else
+          {
+            loginMessage.textContent = 'Invalid credentials or request failed';
             loginMessage.className = 'text-danger';
           }
         })
         .catch(() => {
-          loginMessage.textContent = 'Network error';
+          loginMessage.textContent = 'Network error. Please try again later.';
           loginMessage.className = 'text-danger';
         });
       });

@@ -245,6 +245,7 @@ static void send_cors_preflight(int fd, const char *origin)
         "\r\n",
         origin
     );
+    log_msg(LOG_LEVEL_DEBUG, "CORS preflight response: \n%s\n", buf);
     write(fd, buf, n);
 }
 
@@ -262,6 +263,7 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     http_request_ctx_t request_ctx;
     char* origin;
     char* method = NULL;
+    int rc;
 
     first_line_end = strstr(request, "\r\n");
     if (first_line_end)
@@ -317,8 +319,9 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
         if (!auth_cookie)
         {
             free(cookies);
+            rc = router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
             free(origin);
-            return router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+            return rc;
         }
         /* TODO validate auth_cookie */
         free(cookies);

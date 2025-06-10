@@ -111,11 +111,20 @@
 
         apiPost('/api/register', { email, username, first_name, last_name, password })
           .then(res => {
-            if (res.success) {
+            if (!res)
+            {
+              messageDiv.textContent = 'Unexpected response from server.';
+              messageDiv.className = 'text-danger';
+              return;
+            }
+            if (res.success)
+            {
               messageDiv.textContent = 'Registration successful! Redirecting...';
               messageDiv.className = 'text-success';
               setTimeout(() => window.location.href = 'login.html', 1500);
-            } else {
+            }
+            else
+            {
               messageDiv.textContent = res.error || 'Registration failed.';
               messageDiv.className = 'text-danger';
             }

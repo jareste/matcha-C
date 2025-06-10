@@ -9,8 +9,13 @@ function apiPost(path, data)
     body: JSON.stringify(data)
   })
   .then(r => {
-    console.log(`POST ${path}`, r.status, r.statusText);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) 
+    {
+      return r.json();
+    }
     return r.json();
+  })
+  .catch(err => {
+    return null;
   });
 }
