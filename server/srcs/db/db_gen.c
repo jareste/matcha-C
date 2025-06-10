@@ -333,7 +333,10 @@ int db_gen_update_by_pk(DB_ID db,
     va_list ap;
 
     if (db == INVALID_DB_ID || !schema || schema->n_cols <= 0 || !pk_value)
+    {
+        printf("Invalid parameters for db_gen_update_by_pk\n");
         return ERROR;
+    }
 
     pk_index = -1;
     for (i = 0; i < schema->n_cols; i++)
@@ -345,7 +348,10 @@ int db_gen_update_by_pk(DB_ID db,
         }
     }
     if (pk_index < 0)
+    {
+        printf("No primary key found in schema %s\n", schema->name);
         return ERROR;
+    }
     
     total = schema->n_cols;
     const char **values = malloc(sizeof(char *) * total);
@@ -417,6 +423,11 @@ int db_gen_update_by_pk(DB_ID db,
     paramValues[upd_count] = pk_value;
 
     rc = db_execute(db, sql, upd_count + 1, paramValues);
+
+    if (rc == ERROR)
+    {
+        printf("Failed to execute update query: %s\n", sql);
+    }
 
     free(values);
     free(paramValues);

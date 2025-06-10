@@ -17,7 +17,8 @@ LDFLAGS =	-Lsrcs/log -llog \
 			-Lsrcs/mail -lmail \
 			-Lsrcs/db -ldb \
 			-Lsrcs/api -lapi \
-			-lpthread -lm -ldl $(POSTGRESS_LIB)\
+			-lpthread -lm -ldl \
+			-lssl -lcrypto $(POSTGRESS_LIB)\
 			-L$(cJSON_DIR) -lcjson
 
 RELEASE_CFLAGS = -Werror -Wextra -Wall -g -O3

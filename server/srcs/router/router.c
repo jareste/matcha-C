@@ -8,9 +8,15 @@
 #include "../parse/config_file.h"
 #include "../../inc/ft_malloc.h"
 #include "../../inc/error_codes.h"
+#include "../api/umgmt/token.h"
+#include "../db/db_api.h"
+#include "../db/db_gen.h"
+#include "../db/tables/db_table_user.h"
 #include "router_api.h"
 
 static route_entry_t* m_routes = NULL;
+
+DB_ID get_db_id();
 
 static const char* m_http_code_to_status_text(HTTP_response_code_t code)
 {
@@ -20,6 +26,7 @@ static const char* m_http_code_to_status_text(HTTP_response_code_t code)
         case CODE_201_CREATED: return "Created";
         case CODE_204_NO_CONTENT: return "No Content";
         case CODE_400_BAD_REQUEST: return "Bad Request";
+        case CODE_401_UNAUTHORIZED: return "Unauthorized";
         case CODE_403_FORBIDDEN: return "Forbidden";
         case CODE_404_NOT_FOUND: return "Not Found";
         case CODE_405_METHOD_NOT_ALLOWED: return "Method Not Allowed";
@@ -230,6 +237,60 @@ static char* get_header_value(const char *req, const char *key)
     return out;
 }
 
+static int router_validate_request_token(http_request_ctx_t* ctx, char* request, char* origin)
+{
+    char* cookies;
+    char* auth_cookie;
+    int rc;
+    user_t* user;
+
+    cookies = get_header_value(request, "Cookie");
+    auth_cookie = strstr(cookies, "token=");
+    if (!auth_cookie)
+    {
+        free(cookies);
+        rc = router_http_generate_response(ctx->fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        free(origin);
+        log_msg(LOG_LEVEL_ERROR, "No token in request from fd=%d\n", ctx->fd);
+        return ERROR;
+    }
+    free(origin);
+
+    rc = token_validate(auth_cookie + 6, &ctx->username, &ctx->email, &ctx->uid);
+    if (rc != SUCCESS)
+    {
+        free(cookies);
+        log_msg(LOG_LEVEL_ERROR, "Invalid token in request from fd=%d\n", ctx->fd);
+        router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
+        return ERROR;
+    }
+    free(cookies);
+    
+    rc = db_select_user_by_email(get_db_id(), ctx->email, &user);
+    if (rc != SUCCESS)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to select user by email %s\n", ctx->email);
+        router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
+        return ERROR;
+    }
+
+    if ((strcmp(user->username, ctx->username) != 0) || 
+        (user->id != ctx->uid) ||
+        (user->token == NULL) ||
+        (strcmp(user->token, auth_cookie + 6) != 0))
+    {
+        log_msg(LOG_LEVEL_ERROR, "Invalid token for user %s (uid=%d),\n'%s'\n", ctx->username, ctx->uid, user->token);
+        router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
+        return ERROR;
+    }
+
+    ctx->uid = user->id;
+    ctx->username = strdup(user->username);
+    ctx->email = strdup(user->email);
+
+    return SUCCESS;
+}
+
 static void send_cors_preflight(int fd, const char *origin)
 {
     char buf[512];
@@ -256,8 +317,6 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     char first_line[256] = {0};
     char* space_pos = NULL;
     char* route_end = NULL;
-    char* cookies = NULL;
-    char* auth_cookie = NULL;
     size_t first_line_len = 0;
     route_entry_t* route_entry = NULL;
     http_request_ctx_t request_ctx;
@@ -312,28 +371,31 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
         return SUCCESS;
     }
 
-    if (route_entry->flags & AUTH_REQUIRED)
-    {
-        cookies = get_header_value(request, "Cookie");
-        auth_cookie = strstr(cookies, "token=");
-        if (!auth_cookie)
-        {
-            free(cookies);
-            rc = router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
-            free(origin);
-            return rc;
-        }
-        /* TODO validate auth_cookie */
-        free(cookies);
-    }
-
-    /* Populate request ctx */
     request_ctx.fd = fd;
     request_ctx.request = request;
     request_ctx.request_len = request_len;
 
+    if (route_entry->flags & AUTH_REQUIRED)
+    {
+        rc = router_validate_request_token(&request_ctx, (char*)request, origin);
+        if (rc != SUCCESS)
+            return rc;
+    }
+    else
+    {
+        request_ctx.uid = -1; // No user authenticated
+        request_ctx.username = NULL;
+        request_ctx.email = NULL;
+        free(origin);
+    }
+
+    /* Populate request ctx */
+    router_parse_http_request(request, request_len, &request_ctx.parsed_request);
+
     /* call the handler */
     route_entry->handler(&request_ctx, route_entry->user_data);
+
+    free_http_request(&request_ctx.parsed_request);
 
     return SUCCESS;
 }

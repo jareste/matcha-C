@@ -19,3 +19,18 @@ function apiPost(path, data)
     return null;
   });
 }
+
+function apiGet(path)
+{
+  return fetch(`${API_BASE}${path}`, {
+    method: 'GET',
+    credentials: 'include'
+  })
+  .then(r => {
+    if (!r.ok) 
+    {
+      return r.json();
+    }
+    return r.json();
+  });
+}

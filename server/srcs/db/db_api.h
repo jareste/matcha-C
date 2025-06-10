@@ -1,7 +1,9 @@
 #ifndef DB_H
 #define DB_H
 
+#ifdef IAM_DB_MODULE
 #include <libpq-fe.h>
+#endif
 #include <stdint.h>
 // #include "db_users.h"
 
@@ -26,6 +28,7 @@ int db_execute(DB_ID db,
                int nParams,
                const char *const *paramValues);
 
+#ifdef IAM_DB_MODULE
 /*
  * Execute a SELECT (or any query that returns rows). Returns a PGresult* you must free with db_clear_result().
  *   db: pointer to an open DB handle
@@ -41,6 +44,7 @@ PGresult *db_query(DB_ID db,
                    const char *const *paramValues);
 
 void db_clear_result(PGresult *res);
+#endif /* IAM_DB_MODULE */
 
 void db_close(DB_ID db);
 

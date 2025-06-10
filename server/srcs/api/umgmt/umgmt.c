@@ -6,6 +6,8 @@
 #include "../../db/db_gen.h"
 #include "../../db/db_api.h"
 #include "../../db/tables/db_table_user.h"
+#include "token.h"
+#include <stdio.h>
 
 DB_ID get_db_id();
 
@@ -145,33 +147,48 @@ cleanup:
 
     free_http_request(&request);
 }
+
+void api_umgmt_validate(http_request_ctx_t* ctx, void *user_data)
+{
+    (void)ctx;
+    (void)user_data;
+
+    if (strcmp(ctx->parsed_request.method, "GET") != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_405_METHOD_NOT_ALLOWED,
+                                      "{\"error\":\"Method Not Allowed\"}", NULL);
+        return;
+    }
+
+
+
+    router_http_generate_response(ctx->fd, CODE_200_OK,
+                                  "{\"success\":true, \"message\":\"User is valid\"}", NULL);
+
+
+    return;
+}
+
 #include <unistd.h>
 
 void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
 {
-    http_request_t request;
     user_t* existing_user = NULL;
     cJSON* json = NULL;
     cJSON* email_item = NULL;
     cJSON* password_item = NULL;
+    int ret;
 
     (void)user_data;
 
-    if (router_parse_http_request(ctx->request, ctx->request_len, &request) == ERROR)
-    {
-        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
-                                      "{\"error\":\"Bad Request\"}", NULL);
-        goto cleanup;
-    }
-
-    if (strcmp(request.method, "POST") != 0)
+    if (strcmp(ctx->parsed_request.method, "POST") != 0)
     {
         router_http_generate_response(ctx->fd, CODE_405_METHOD_NOT_ALLOWED,
                                       "{\"error\":\"Method Not Allowed\"}", NULL);
         goto cleanup;
     }
 
-    json = cJSON_Parse(request.body);
+    json = cJSON_Parse(ctx->parsed_request.body);
     if (!json)
     {
         router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
@@ -179,12 +196,12 @@ void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
         goto cleanup;
     }
 
-    printf("request body: %s\n", request.body);
+    printf("request body: %s\n", ctx->parsed_request.body);
     email_item = cJSON_GetObjectItemCaseSensitive(json, "email");
     if (!email_item || !cJSON_IsString(email_item) || (email_item->valuestring == NULL))
     {
         router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
-                                      "{\"error\":\"Username is required\"}", NULL);
+                                      "{\"error\":\"Email is required\"}", NULL);
         goto cleanup;
     }
 
@@ -192,7 +209,7 @@ void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
     if (!existing_user)
     {
         router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
-                                      "{\"error\":\"User not found\"}", NULL);
+                                      "{\"error\":\"Email not found\"}", NULL);
         goto cleanup;
     }
     password_item = cJSON_GetObjectItemCaseSensitive(json, "password");
@@ -227,7 +244,20 @@ void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
     /* TODO make it prettier */
     const char *resp_body = "{\"success\":true, \"message\":\"Login successful\"}";
     size_t blen = strlen(resp_body);
-    const char* session_id = "HolaQueTalEstoEsUNTest";
+    char token[1024];
+    char* uname = strdup(existing_user->username);
+    char* email = strdup(existing_user->email);
+    int uid = existing_user->id;
+    ret = token_generate(uname, email, uid, token, sizeof(token));
+    if (ret != SUCCESS)
+    {
+        router_http_generate_response(ctx->fd, CODE_500_INTERNAL_SERVER_ERROR,
+                                      "{\"error\":\"Failed to generate token\"}", NULL);
+        goto cleanup;
+    }
+    free(uname);
+    free(email);
+    printf("Generating token for user %s\n", existing_user->username);
 
     char header_buf[768];
     int hlen = snprintf(header_buf, sizeof(header_buf),
@@ -238,23 +268,37 @@ void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
         "Content-Type: application/json\r\n"
         "Content-Length: %zu\r\n"
         "\r\n",
-        session_id, "http://localhost:8000", blen
+        token, "http://localhost:8000", blen
     );
 
     write(ctx->fd, header_buf, hlen);
     write(ctx->fd, resp_body, blen);
     /* TODO_END */
 
+    existing_user->token = strdup(token);
+    if (db_tuser_update_user(get_db_id(), existing_user) == ERROR)
+    {
+        printf("Failed to update user token in database\n");
+    }
+    printf("User %s logged in successfully with token: \n'%s'\n", existing_user->username, existing_user->token);
+    printf("'%s'\n", existing_user->last_online);
+
     // router_http_generate_response(ctx->fd, CODE_200_OK,
     //     "{\"success\":true, \"message\":\"Login successful\"}", NULL);
 
 cleanup:
-    free_http_request(&request);
+    if (json)
+        cJSON_Delete(json);
+
+    if (existing_user)
+        db_tuser_free_user(existing_user);
+
 }
 
 void api_umgmt_init()
 {
     router_add("/api/register", api_umgmt_register, NULL, FLAG_NONE);
-    router_add("/api/login", api_umgmt_login, NULL, AUTH_REQUIRED);
+    router_add("/api/login", api_umgmt_login, NULL, FLAG_NONE);
+    router_add("/api/validate", api_umgmt_validate, NULL, AUTH_REQUIRED);
 }
 
