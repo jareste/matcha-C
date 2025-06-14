@@ -245,6 +245,11 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
     user_t* user;
 
     cookies = get_header_value(request, "Cookie");
+    if (!cookies)
+    {
+        log_msg(LOG_LEVEL_ERROR, "No cookies in request from fd=%d\n", ctx->fd);
+        return router_http_generate_response(ctx->fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+    }
     auth_cookie = strstr(cookies, "token=");
     if (!auth_cookie)
     {
@@ -264,11 +269,11 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
         router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
         return ERROR;
     }
-    free(cookies);
     
     rc = db_select_user_by_email(get_db_id(), ctx->email, &user);
     if (rc != SUCCESS)
     {
+        free(cookies);
         log_msg(LOG_LEVEL_ERROR, "Failed to select user by email %s\n", ctx->email);
         router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
         return ERROR;
@@ -279,10 +284,12 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
         (user->token == NULL) ||
         (strcmp(user->token, auth_cookie + 6) != 0))
     {
+        free(cookies);
         log_msg(LOG_LEVEL_ERROR, "Invalid token for user %s (uid=%d),\n'%s'\n", ctx->username, ctx->uid, user->token);
         router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
         return ERROR;
     }
+    free(cookies);
 
     ctx->uid = user->id;
     ctx->username = strdup(user->username);

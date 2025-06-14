@@ -8,6 +8,7 @@
 #include "../../db/tables/db_table_user.h"
 #include "token.h"
 #include <stdio.h>
+#include <unistd.h>
 
 DB_ID get_db_id();
 
@@ -148,6 +149,35 @@ cleanup:
     free_http_request(&request);
 }
 
+void api_umgmt_logout(http_request_ctx_t* ctx, void *user_data)
+{
+    (void)ctx;
+    (void)user_data;
+
+    if (strcmp(ctx->parsed_request.method, "POST") != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_405_METHOD_NOT_ALLOWED,
+                                      "{\"error\":\"Method Not Allowed\"}", NULL);
+        return;
+    }
+
+    char header_buf[2048];
+    int hlen = snprintf(header_buf, sizeof(header_buf),
+        "HTTP/1.1 200 OK\r\n"
+        "Set-Cookie: token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT\r\n"
+        "Access-Control-Allow-Origin: %s\r\n"
+        "Access-Control-Allow-Credentials: true\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: 0\r\n"
+        "\r\n",
+        "http://localhost:8000"
+    );
+    header_buf[hlen] = '\0';
+    write(ctx->fd, header_buf, hlen);
+    printf("User logged out successfully\n");
+
+}
+
 void api_umgmt_validate(http_request_ctx_t* ctx, void *user_data)
 {
     (void)ctx;
@@ -163,13 +193,11 @@ void api_umgmt_validate(http_request_ctx_t* ctx, void *user_data)
 
 
     router_http_generate_response(ctx->fd, CODE_200_OK,
-                                  "{\"success\":true, \"message\":\"User is valid\"}", NULL);
+                                  "{\"success\":true, \"message\":\"User is valid\", \"username\":\"fooo\"}", NULL);
 
 
     return;
 }
-
-#include <unistd.h>
 
 void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
 {
@@ -259,7 +287,7 @@ void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
     free(email);
     printf("Generating token for user %s\n", existing_user->username);
 
-    char header_buf[768];
+    char header_buf[2048];
     int hlen = snprintf(header_buf, sizeof(header_buf),
         "HTTP/1.1 200 OK\r\n"
         "Set-Cookie: token=%s; HttpOnly; Path=/; SameSite=Strict\r\n"
@@ -270,6 +298,7 @@ void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
         "\r\n",
         token, "http://localhost:8000", blen
     );
+    header_buf[hlen] = '\0';
 
     write(ctx->fd, header_buf, hlen);
     write(ctx->fd, resp_body, blen);
@@ -300,5 +329,6 @@ void api_umgmt_init()
     router_add("/api/register", api_umgmt_register, NULL, FLAG_NONE);
     router_add("/api/login", api_umgmt_login, NULL, FLAG_NONE);
     router_add("/api/validate", api_umgmt_validate, NULL, AUTH_REQUIRED);
+    router_add("/api/logout", api_umgmt_logout, NULL, AUTH_REQUIRED);
 }
 

@@ -43,12 +43,6 @@ int db_execute(DB_ID db, const char *sql, int nParams, const char *const *paramV
 
     conn = m_db_id_to_PGconn(db);
 
-    // Debugging: Log the query and parameters
-    fprintf(stderr, "Executing SQL: %s\n", sql);
-    for (int i = 0; i < nParams; i++) {
-        fprintf(stderr, "Parameter %d: '%s'\n", i + 1, paramValues[i]);
-    }
-
     res = PQexecParams(
         conn,
         sql,
