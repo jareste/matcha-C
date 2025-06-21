@@ -40,6 +40,24 @@ static int m_http_request_handler(int fd, const char *request, size_t request_le
     return router_handle_http_request(fd, request, request_len);
 }
 
+static int m_ws_request_handler(int fd, const char *request, size_t request_len)
+{
+    (void)request_len;
+    log_msg(LOG_LEVEL_DEBUG, "WebSocket request handler not implemented yet for fd=%d\n", fd);
+    log_msg(LOG_LEVEL_DEBUG, "received '%zu' bytes on fd=%d\n", request_len, fd);
+    log_msg(LOG_LEVEL_DEBUG, "received message: '%.*s'\n", (int)request_len, request);
+    return ERROR;
+}
+
+static int m_sio_request_handler(int fd, const char *request, size_t request_len)
+{
+    (void)request_len;
+    log_msg(LOG_LEVEL_DEBUG, "SIO request handler not implemented yet for fd=%d\n", fd);
+    log_msg(LOG_LEVEL_DEBUG, "SIO received '%zu' bytes on fd=%d\n", request_len, fd);
+    log_msg(LOG_LEVEL_DEBUG, "SIO received message: '%.*s'\n", (int)request_len, request);
+    return ERROR;
+}
+
 int main_loop()
 {
     int ret;
@@ -99,7 +117,7 @@ int main()
     if (server_init(ssl_config.PORT) == ERROR)
         goto error;
 
-    server_set_http_request_handler(m_http_request_handler);
+    server_set_request_handlers(m_http_request_handler, m_ws_request_handler, m_sio_request_handler);
 
     if (m_init_dbs(&m_DB) == ERROR)
         goto error;

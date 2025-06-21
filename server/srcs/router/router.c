@@ -14,6 +14,9 @@
 #include "../db/tables/db_table_user.h"
 #include "router_api.h"
 
+
+#include "../server/server_api.h"
+
 static route_entry_t* m_routes = NULL;
 
 DB_ID get_db_id();
@@ -115,6 +118,8 @@ void router_add(const char* path, route_cb_t cb, void* user_data, http_request_f
 {
     route_entry_t* entry = malloc(sizeof(*entry));
 
+    log_msg(LOG_LEVEL_BOOT, "Router: Route '%s' added successfully.\n", path);
+
     entry->path = strdup(path);
     entry->handler = cb;
     entry->user_data = user_data;
@@ -211,7 +216,7 @@ void free_http_request(http_request_t* request)
     free(request->body);
 }
 
-static char* get_header_value(const char *req, const char *key)
+char* get_header_value(const char *req, const char *key)
 {
     char* p;
     char* end;
@@ -248,7 +253,9 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
     if (!cookies)
     {
         log_msg(LOG_LEVEL_ERROR, "No cookies in request from fd=%d\n", ctx->fd);
-        return router_http_generate_response(ctx->fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        router_http_generate_response(ctx->fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        free(origin);
+        return ERROR;
     }
     auth_cookie = strstr(cookies, "token=");
     if (!auth_cookie)
