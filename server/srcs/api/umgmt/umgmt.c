@@ -144,7 +144,7 @@ cleanup:
         cJSON_Delete(json);
 
     if (existing_user)
-        free(existing_user);
+        db_tuser_free_user(existing_user);
 
     free_http_request(&request);
 }
