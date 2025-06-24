@@ -64,4 +64,6 @@ int router_http_generate_response(int fd, HTTP_response_code_t code, const char*
 int router_parse_http_request(const char* request, size_t request_len, http_request_t* out_request);
 void free_http_request(http_request_t* request);
 
+int router_validate_token_for_server(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin);
+
 #endif /* ROUTER_API_H */

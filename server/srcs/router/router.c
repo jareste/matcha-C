@@ -274,6 +274,8 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
         free(cookies);
         log_msg(LOG_LEVEL_ERROR, "Invalid token in request from fd=%d\n", ctx->fd);
         router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
+        if (ctx->email) free(ctx->email);
+        if (ctx->username) free(ctx->username);
         return ERROR;
     }
     
@@ -283,6 +285,8 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
         free(cookies);
         log_msg(LOG_LEVEL_ERROR, "Failed to select user by email %s\n", ctx->email);
         router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
+        if (ctx->email) free(ctx->email);
+        if (ctx->username) free(ctx->username);
         return ERROR;
     }
 
@@ -294,13 +298,81 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
         free(cookies);
         log_msg(LOG_LEVEL_ERROR, "Invalid token for user %s (uid=%d),\n'%s'\n", ctx->username, ctx->uid, user->token);
         router_http_generate_response(ctx->fd, CODE_401_UNAUTHORIZED, "{\"error\": \"Unauthorized\"}", NULL);
+        if (ctx->email) free(ctx->email);
+        if (ctx->username) free(ctx->username);
         return ERROR;
     }
     free(cookies);
 
     ctx->uid = user->id;
-    ctx->username = strdup(user->username);
-    ctx->email = strdup(user->email);
+
+    if (user)
+        db_tuser_free_user(user);
+
+    return SUCCESS;
+}
+
+int router_validate_token_for_server(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin)
+{
+    int rc;
+    user_t* user;
+    char* cookies;
+    char* auth_cookie;
+
+    cookies = get_header_value(request, "Cookie");
+    if (!cookies)
+    {
+        log_msg(LOG_LEVEL_ERROR, "No cookies in request from fd=%d\n", fd);
+        router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        free(origin);
+        return ERROR;
+    }
+    auth_cookie = strstr(cookies, "token=");
+    if (!auth_cookie)
+    {
+        free(cookies);
+        rc = router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        free(origin);
+        log_msg(LOG_LEVEL_ERROR, "No token in request from fd=%d\n", fd);
+        return ERROR;
+    }
+    free(origin);
+
+    rc = token_validate(auth_cookie + 6, out_username, out_email, out_uid);
+    if (rc != SUCCESS)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Token validation failed for token: %s\n", auth_cookie + 6);
+        if (*out_email) free(*out_email);
+        if (*out_username) free(*out_username);
+        return ERROR;
+    }
+
+    rc = db_select_user_by_email(get_db_id(), *out_email, &user);
+    if (rc != SUCCESS || !user)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to select user by email %s\n", *out_email);
+        if (*out_email) free(*out_email);
+        if (*out_username) free(*out_username);
+        return ERROR;
+    }
+
+    if ((strcmp(user->username, *out_username) != 0) || 
+        (user->id != *out_uid) ||
+        (user->token == NULL) ||
+        (strcmp(user->token, auth_cookie + 6) != 0))
+    {
+        log_msg(LOG_LEVEL_ERROR, "user->username: %s, out_username: %s, user->id: %d, out_uid: %d\n",
+                user->username, *out_username, user->id, *out_uid);
+        log_msg(LOG_LEVEL_ERROR, "\nutoken: '%s'\natoken: '%s'\n", user->token, auth_cookie + 6);
+        log_msg(LOG_LEVEL_ERROR, "Invalid token for user %s (uid=%d),\n'%s'\n", *out_username, *out_uid, user->token);
+        if (user) db_tuser_free_user(user);
+        if (*out_email) free(*out_email);
+        if (*out_username) free(*out_username);
+        return ERROR;
+    }
+
+    if (user)
+        db_tuser_free_user(user);
 
     return SUCCESS;
 }
@@ -410,6 +482,9 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     route_entry->handler(&request_ctx, route_entry->user_data);
 
     free_http_request(&request_ctx.parsed_request);
+
+    if (request_ctx.username) free(request_ctx.username);
+    if (request_ctx.email) free(request_ctx.email);
 
     return SUCCESS;
 }

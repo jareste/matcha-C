@@ -2,7 +2,8 @@ import socketio
 import threading
 import time
 
-NUM_CLIENTS = 10  # Modify this value to change the number of clients
+# DOES NOT WORK AS IT NEEDS COOKIE TO WORK
+NUM_CLIENTS = 1  # Modify this value to change the number of clients
 
 def create_client(client_id):
     sio = socketio.Client()
@@ -19,8 +20,12 @@ def create_client(client_id):
     def on_message(data):
         print(f"Client {client_id} received: {data}")
 
-    sio.connect('http://localhost:8080', transports=['websocket'])
-    print(f"Client {client_id} connecting to the server...")
+    try:
+        sio.connect('http://localhost:8080', transports=['websocket'])
+        print(f"Client {client_id} connecting to the server...")
+    except socketio.exceptions.ConnectionError as e:
+        print(f"Client {client_id} failed to connect: {e}")
+        return  # Exit the function gracefully if connection fails
 
     try:
         while True:

@@ -310,7 +310,6 @@ void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
         printf("Failed to update user token in database\n");
     }
     printf("User %s logged in successfully with token: \n'%s'\n", existing_user->username, existing_user->token);
-    printf("'%s'\n", existing_user->last_online);
 
     // router_http_generate_response(ctx->fd, CODE_200_OK,
     //     "{\"success\":true, \"message\":\"Login successful\"}", NULL);
@@ -320,7 +319,7 @@ cleanup:
         cJSON_Delete(json);
 
     if (existing_user)
-        db_tuser_free_user(existing_user);
+        db_tuser_free_user(existing_user);    
 
 }
 

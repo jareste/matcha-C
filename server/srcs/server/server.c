@@ -91,6 +91,8 @@ static on_request m_http_request_handler = NULL;
 static on_request m_ws_request_handler = NULL;
 static on_request m_sio_request_handler = NULL;
 
+/* not liking it */
+int validate_cookies(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin);
 char* get_header_value(const char *req, const char *key);
 
 /* Definitions */
@@ -127,6 +129,7 @@ static int m_ws_parse_frame(int fd, uint8_t *hdr, uint8_t **payload, uint64_t *l
     n = recv(fd, hdr, 2, 0);
     if (n <= 0)
     {
+        log_msg(LOG_LEVEL_ERROR, "Failed to read WebSocket frame header from fd=%d\n", fd);
         *payload = NULL;
         *len = 0;
         return ERROR;
@@ -159,6 +162,7 @@ static int m_ws_parse_frame(int fd, uint8_t *hdr, uint8_t **payload, uint64_t *l
         free(*payload);
         *payload = NULL;
         *len = 0;
+        log_msg(LOG_LEVEL_ERROR, "Failed to read WebSocket frame payload from fd=%d\n", fd);
         return ERROR;
     }
 
@@ -299,6 +303,20 @@ static void m_do_sio_ws_handshake(int fd, const char *req, client_t *c)
     char accept[64];
     char open_pkt[512];
     int n;
+    char* username = NULL;
+    char* email = NULL;
+    int uid = 0;
+    char* origin = strdup("http://localhost:8000"); /* TODO make it properly */
+
+    if (validate_cookies(fd, req, &username, &email, &uid, origin) == ERROR)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Invalid token for fd=%d\n", fd);
+        if (username) free(username);
+        if (email) free(email);
+        c->state = CS_HTTP;
+        epoll_ctl(m_epoll_fd, EPOLL_CTL_MOD, fd, &(struct epoll_event){ .events = EPOLLIN | EPOLLRDHUP, .data.fd = fd });
+        return;
+    }
 
     key = get_header_value(req, "Sec-WebSocket-Key");
     m_compute_ws_accept(key, accept);
@@ -332,7 +350,7 @@ static int m_sio_ws_handle_frame(client_t *c)
     char* body;
     size_t body_len;
 
-    if (m_ws_read_text_payload(c->fd, &payload, &len) <= 0)
+    if (m_ws_read_text_payload(c->fd, &payload, &len) == ERROR)
     {
         REMOVE_CLIENT(c->fd);
         if (payload)

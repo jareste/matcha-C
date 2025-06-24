@@ -27,6 +27,11 @@ DB_ID get_db_id()
     return m_DB;
 }
 
+int validate_cookies(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin)
+{
+    return router_validate_token_for_server(fd, request, out_username, out_email, out_uid, origin);
+}
+
 void signal_handler(int signum)
 {
     if (signum == SIGINT || signum == SIGTERM)
