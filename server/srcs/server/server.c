@@ -32,6 +32,8 @@
     if (_c)                                                \
     {                                                      \
       HASH_DEL(clients, _c);                               \
+      if (_c->state == CS_SIO_WS_OPEN && m_client_sio_close_handler) \
+        m_client_sio_close_handler(fd);                    \
       if (_c->sio_sid)                                     \
         free(_c->sio_sid);                                 \
       free(_c);                                            \
@@ -90,10 +92,22 @@ static struct epoll_event m_events[MAX_EVENTS];
 static on_request m_http_request_handler = NULL;
 static on_request m_ws_request_handler = NULL;
 static on_request m_sio_request_handler = NULL;
+static on_new_client m_new_sio_client_handler = NULL;
+static on_client_close m_client_sio_close_handler = NULL;
 
 /* not liking it */
 int validate_cookies(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin);
 char* get_header_value(const char *req, const char *key);
+
+void server_set_new_client_handler(on_new_client handler)
+{
+    m_new_sio_client_handler = handler;
+}
+
+void server_set_client_close_handler(on_client_close handler)
+{
+    m_client_sio_close_handler = handler;
+}
 
 /* Definitions */
 void server_set_request_handlers(on_request http_handler, on_request ws_handler, on_request sio_handler)
@@ -337,11 +351,15 @@ static void m_do_sio_ws_handshake(int fd, const char *req, client_t *c)
         c->sio_sid);
 
     m_send_ws_frame(fd, 0x1, open_pkt, n, true);
+    if (m_new_sio_client_handler)
+        m_new_sio_client_handler(fd, uid);
+
+    if (username) free(username);
+    if (email) free(email);
 
     /* Send the connection accepted frame */
     m_send_ws_frame(fd, 0x1, "40", 2, true);
 }
-
 static int m_sio_ws_handle_frame(client_t *c)
 {
     char *payload;

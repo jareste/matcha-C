@@ -57,9 +57,7 @@ static int m_ws_request_handler(int fd, const char *request, size_t request_len)
 static int m_sio_request_handler(int fd, const char *request, size_t request_len)
 {
     (void)request_len;
-    log_msg(LOG_LEVEL_DEBUG, "SIO request handler not implemented yet for fd=%d\n", fd);
-    log_msg(LOG_LEVEL_DEBUG, "SIO received '%zu' bytes on fd=%d\n", request_len, fd);
-    log_msg(LOG_LEVEL_DEBUG, "SIO received message: '%.*s'\n", (int)request_len, request);
+    router_handle_sio_request(fd, request, request_len);
     return ERROR;
 }
 
@@ -123,6 +121,8 @@ int main()
         goto error;
 
     server_set_request_handlers(m_http_request_handler, m_ws_request_handler, m_sio_request_handler);
+    server_set_new_client_handler(sio_on_open);
+    server_set_client_close_handler(sio_on_close);
 
     if (m_init_dbs(&m_DB) == ERROR)
         goto error;
@@ -135,6 +135,7 @@ int main()
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, signal_handler);
     main_loop();
+    router_http_clear();
     log_msg(LOG_LEVEL_INFO, "Exiting...\n");
     log_close();
 
@@ -143,5 +144,6 @@ int main()
 error:
     parse_free_config();
     server_cleanup();
+    router_http_clear();
     return ERROR;
 }

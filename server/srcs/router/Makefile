@@ -1,7 +1,9 @@
 include ../../config.mk
 
 NAME = librouter.a
-SRC = router.c 
+SRC = router.c \
+	  router_http.c \
+	  router_sio.c
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 INCLUDES = -I../../inc -I../log

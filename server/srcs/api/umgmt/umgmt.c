@@ -12,7 +12,7 @@
 
 DB_ID get_db_id();
 
-void api_umgmt_register(http_request_ctx_t* ctx, void *user_data)
+void api_umgmt_register(void* _ctx, void *user_data)
 {
     http_request_t request;
     char* password;
@@ -25,6 +25,9 @@ void api_umgmt_register(http_request_ctx_t* ctx, void *user_data)
     cJSON *first_name_item = NULL;
     cJSON *last_name_item = NULL;
     int ret;
+    http_request_ctx_t* ctx;
+
+    ctx = (http_request_ctx_t*)_ctx;
 
     (void)user_data;
 
@@ -149,10 +152,13 @@ cleanup:
     free_http_request(&request);
 }
 
-void api_umgmt_logout(http_request_ctx_t* ctx, void *user_data)
+void api_umgmt_logout(void* _ctx, void *user_data)
 {
-    (void)ctx;
+    http_request_ctx_t* ctx;
+
     (void)user_data;
+
+    ctx = (http_request_ctx_t*)_ctx;
 
     if (strcmp(ctx->parsed_request.method, "POST") != 0)
     {
@@ -178,10 +184,13 @@ void api_umgmt_logout(http_request_ctx_t* ctx, void *user_data)
 
 }
 
-void api_umgmt_validate(http_request_ctx_t* ctx, void *user_data)
+void api_umgmt_validate(void* _ctx, void *user_data)
 {
-    (void)ctx;
+    http_request_ctx_t* ctx;
+    char response[256];
+
     (void)user_data;
+    ctx = (http_request_ctx_t*)_ctx;
 
     if (strcmp(ctx->parsed_request.method, "GET") != 0)
     {
@@ -190,17 +199,19 @@ void api_umgmt_validate(http_request_ctx_t* ctx, void *user_data)
         return;
     }
 
-
-
+    snprintf(response, sizeof(response),
+             "{\"success\":true, \"message\":\"User is valid\", \"username\":\"%s\"}",
+             ctx->username ? ctx->username : "unknown");
     router_http_generate_response(ctx->fd, CODE_200_OK,
-                                  "{\"success\":true, \"message\":\"User is valid\", \"username\":\"fooo\"}", NULL);
+                                  response, NULL);
 
 
     return;
 }
 
-void api_umgmt_login(http_request_ctx_t* ctx, void *user_data)
+void api_umgmt_login(void* _ctx, void *user_data)
 {
+    http_request_ctx_t* ctx = (http_request_ctx_t*)_ctx;
     user_t* existing_user = NULL;
     cJSON* json = NULL;
     cJSON* email_item = NULL;
@@ -325,9 +336,9 @@ cleanup:
 
 void api_umgmt_init()
 {
-    router_add("/api/register", api_umgmt_register, NULL, FLAG_NONE);
-    router_add("/api/login", api_umgmt_login, NULL, FLAG_NONE);
-    router_add("/api/validate", api_umgmt_validate, NULL, AUTH_REQUIRED);
-    router_add("/api/logout", api_umgmt_logout, NULL, AUTH_REQUIRED);
+    router_http_add("/api/register", api_umgmt_register, NULL, FLAG_NONE);
+    router_http_add("/api/login", api_umgmt_login, NULL, FLAG_NONE);
+    router_http_add("/api/validate", api_umgmt_validate, NULL, AUTH_REQUIRED);
+    router_http_add("/api/logout", api_umgmt_logout, NULL, AUTH_REQUIRED);
 }
 

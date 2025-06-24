@@ -90,16 +90,26 @@ void db_tuser_free_user(user_t* user)
 {
     if (!user) return;
 
-    free(user->username);
-    free(user->email);
-    free(user->password_hash);
-    free(user->first_name);
-    free(user->last_name);
-    free(user->gender);
-    free(user->orientation);
-    free(user->bio);
-    free(user->last_online);
-    free(user->token);
+    if (user->username)
+        free(user->username);
+    if (user->email)
+        free(user->email);
+    if (user->password_hash)
+        free(user->password_hash);
+    if (user->first_name)
+        free(user->first_name);
+    if (user->last_name)
+        free(user->last_name);
+    if (user->gender)
+        free(user->gender);
+    if (user->orientation)
+        free(user->orientation);
+    if (user->bio)
+        free(user->bio);
+    if (user->last_online)
+        free(user->last_online);
+    if (user->token)
+        free(user->token);
 
     free(user);
 }
@@ -124,6 +134,8 @@ static void m_fill_user_with_PGresult_row(user_t* user, PGresult* res, int row, 
     user->email_verified = (strcmp(PQgetvalue(res, row, 15), "t") == 0);
     user->token = want_token ? strdup(PQgetvalue(res, row, 16)) : NULL;
 
+    printf("db_tuser_fill_user: id=%d, username=%s, email=%s, first_name=%s, last_name=%s\n",
+           user->id, user->username, user->email, user->first_name, user->last_name);
 
     if (EMPTY_STRING(user->bio))
     {
@@ -233,6 +245,11 @@ int db_select_user_by_email(DB_ID DB, const char* email, user_t** user)
     {
         *user = calloc(sizeof(user_t), 1);
         m_fill_user_with_PGresult_row(*user, r2, 0, true);
+    }
+    else
+    {
+        *user = NULL;
+        return ERROR;
     }
 
     if (r2) db_clear_result(r2);
