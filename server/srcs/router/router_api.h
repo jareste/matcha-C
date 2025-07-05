@@ -84,6 +84,7 @@ void router_http_delete(route_entry_t* entry);
 void router_http_clear();
 
 /* ROUTER SIO */
+void router_sio_add(const char* path, route_cb_t cb, void* user_data, http_request_flags_t flags);
 void router_handle_sio_request(int fd, const char *request, size_t request_len);
 int sio_on_open(int fd, int uid);
 int sio_on_close(int fd);

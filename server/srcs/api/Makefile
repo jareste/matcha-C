@@ -3,7 +3,8 @@ include ../../config.mk
 NAME = libapi.a
 SRC =	api.c \
 		umgmt/umgmt.c \
-		umgmt/token.c
+		umgmt/token.c \
+		chat/chat.c \
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs

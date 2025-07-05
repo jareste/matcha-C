@@ -28,8 +28,9 @@ typedef struct
 static sio_data_t *sio_connections = NULL;
 static route_entry_t* m_routes = NULL;
 
-void router_sio_add( const char* path, route_cb_t cb, void* user_data, http_request_flags_t flags)
+void router_sio_add(const char* path, route_cb_t cb, void* user_data, http_request_flags_t flags)
 {
+    log_msg(LOG_LEVEL_DEBUG, "[SIO] Adding route '%s' with flags %d", path, flags);
     router_add(&m_routes, path, cb, user_data, flags);
 }
 
@@ -82,14 +83,14 @@ void router_handle_sio_request(int fd, const char *request, size_t request_len)
 
     if (request_len < 2 || request[0] != '2')
     {
-        log_msg(LOG_LEVEL_ERROR, "[SIO] Invalid frame (not '2'): '%.*s'",
+        log_msg(LOG_LEVEL_ERROR, "[SIO] Invalid frame (not '2'): '%.*s'\n",
                 (int)request_len, request);
         return;
     }
 
     if (m_find_uid(fd, &uid) == ERROR)
     {
-        log_msg(LOG_LEVEL_ERROR, "[SIO] Failed to find uid for fd=%d", fd);
+        log_msg(LOG_LEVEL_ERROR, "[SIO] Failed to find uid for fd=%d\n", fd);
         return;
     }
 
@@ -103,7 +104,7 @@ void router_handle_sio_request(int fd, const char *request, size_t request_len)
     free(json_str);
     if (!root || !cJSON_IsArray(root))
     {
-        log_msg(LOG_LEVEL_ERROR, "[SIO] Payload is not a JSON array");
+        log_msg(LOG_LEVEL_ERROR, "[SIO] Payload is not a JSON array\n");
         cJSON_Delete(root);
         return;
     }
@@ -111,7 +112,7 @@ void router_handle_sio_request(int fd, const char *request, size_t request_len)
     evt_item = cJSON_GetArrayItem(root, 0);
     if (!evt_item || !cJSON_IsString(evt_item))
     {
-        log_msg(LOG_LEVEL_ERROR, "[SIO] First array element is not a string (event)");
+        log_msg(LOG_LEVEL_ERROR, "[SIO] First array element is not a string (event)\n");
         cJSON_Delete(root);
         return;
     }
@@ -142,7 +143,7 @@ void router_handle_sio_request(int fd, const char *request, size_t request_len)
     }
     else
     {
-        log_msg(LOG_LEVEL_WARN, "[SIO] No handler registered for event '%s'. error for user '%d'", ctx.event, uid);
+        log_msg(LOG_LEVEL_WARN, "[SIO] No handler registered for event '%s'. error for user '%d'\n", ctx.event, uid);
     }
 
     free(ctx.event);
