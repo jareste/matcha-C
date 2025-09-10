@@ -1,0 +1,84 @@
+@import "tailwindcss" layer(base);
+@import "tailwindcss/theme" layer(theme);
+@import "tailwindcss/utilities" layer(utilities);
+
+/* Color Theme Swatches in Hex */
+.Teal-and-Gray-1-hex { color: #00747C; }
+.Teal-and-Gray-2-hex { color: #00BBC9; }
+.Teal-and-Gray-3-hex { color: #CACACA; }
+.Teal-and-Gray-4-hex { color: #878787; }
+.Teal-and-Gray-5-hex { color: #202022; }
+.Teal-and-Gray-6-hex { color: #FF6B35; }
+
+/* Color Theme Swatches in RGBA */
+.Teal-and-Gray-1-rgba { color: rgba(0, 116, 124, 1); }
+.Teal-and-Gray-2-rgba { color: rgba(0, 186, 200, 1); }
+.Teal-and-Gray-3-rgba { color: rgba(202, 202, 202, 1); }
+.Teal-and-Gray-4-rgba { color: rgba(135, 135, 135, 1); }
+.Teal-and-Gray-5-rgba { color: rgba(31, 31, 33, 1); }
+
+/* Color Theme Swatches in HSLA */
+.Teal-and-Gray-1-hsla { color: hsla(183, 100, 24, 1); }
+.Teal-and-Gray-2-hsla { color: hsla(184, 100, 39, 1); }
+.Teal-and-Gray-3-hsla { color: hsla(0, 0, 79, 1); }
+.Teal-and-Gray-4-hsla { color: hsla(0, 0, 52, 1); }
+.Teal-and-Gray-5-hsla { color: hsla(240, 3, 12, 1); }
+
+
+.hover-underline-animation
+{
+	position: relative;
+}
+
+.hover-underline-animation::after
+{
+	content: '';
+	position: absolute;
+	width: 100%;
+	transform: scaleX(0);
+	height: 2px;
+	bottom: 0px;
+	left: 0;
+	background-color: currentColor;
+	transform-origin: bottom right;
+	transition: transform 0.3s ease-out;
+}
+
+
+.hover-underline-animation:hover::after
+{
+	transform: scaleX(1);
+	transform-origin: bottom left;
+}
+
+
+.animate-fade-in
+{
+	animation: fade-in 0.6s ease-out forwards;
+}
+
+
+.bg
+{
+	background-color: #878787;
+}
+
+.text-blue
+{
+	color: #00BBC9;
+	@apply text-xs px-2
+}
+
+.box-blue
+{
+	border-color: #00747C;
+	box-shadow: 0 0 10px #CACACA;
+}
+
+.btn-contrast
+{
+	@apply pt-0 pb-1 pl-1 pr-1 border-t-2 border-l-2 border-r-2;
+ 	border-color: #FF6B35;
+ 	color: #FF6B35;
+ 	background-color: #CACACA;
+}
