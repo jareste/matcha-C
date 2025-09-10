@@ -1,7 +1,7 @@
 
 
 up:
-	docker compose up
+	docker compose up || docker-compose up
 
 prune:
 	docker system prune -a -f

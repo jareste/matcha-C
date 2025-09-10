@@ -64,6 +64,8 @@ static int m_sio_request_handler(int fd, const char *request, size_t request_len
 int main_loop()
 {
     int ret;
+
+    log_msg(LOG_LEVEL_INFO, "Entering main loop...\n");
     while (!m_die)
     {
         ret = server_select();

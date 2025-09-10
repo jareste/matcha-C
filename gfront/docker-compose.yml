@@ -6,7 +6,7 @@ networks:
 services:
   front:
      container_name: front
-     restart: no
+     restart: "no"
      build:
       context: .
       dockerfile: front/Dockerfile

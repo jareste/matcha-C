@@ -147,12 +147,12 @@ create_cert:
 db_up:
 	@service docker start || true
 	@echo "Starting the database using Docker Compose..."
-	@docker compose -f ../BBDD/docker-compose.yml up -d
+	@docker compose -f ../BBDD/docker-compose.yml up -d || docker-compose -f ../BBDD/docker-compose.yml up -d
 	@echo "Database is up and running."
 
 db_down:
 	@echo "Stopping the database using Docker Compose..."
-	@docker compose -f ../BBDD/docker-compose.yml down || true
+	@docker compose -f ../BBDD/docker-compose.yml down || docker-compose -f ../BBDD/docker-compose.yml down || true
 	@echo "Database has been stopped."
 
 db_clean:

@@ -686,7 +686,7 @@ void server_cleanup()
         HASH_DEL(clients, c);
         if (c->sio_sid)
             free(c->sio_sid);
-        free(c);
         log_msg(LOG_LEVEL_INFO, "Client removed: fd=%d\n", c->fd);
+        free(c);
     }
 }
