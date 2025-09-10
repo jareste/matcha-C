@@ -68,6 +68,21 @@ message_t_array *db_tmessage_select_by_sender(DB_ID DB, int sender_id);
 message_t_array *db_tmessage_select_by_recipient(DB_ID DB, int recipient_id);
 
 /*
+ * Select messages between a sender and a recipient
+ */
+message_t_array* db_tmessage_select_by_sender_and_recipient(DB_ID DB, int sender_id, int recipient_id);
+
+/*
+ * Print a message_t
+ */
+void db_tmessage_print(message_t *m);
+
+/*
+ * Print a message_t_array
+ */
+void db_tmessage_print_array(message_t_array *arr);
+
+/*
  * Mark a message as read (or unread) by its ID
  */
 int db_tmessage_update_read_status(DB_ID DB, int message_id, bool is_read);

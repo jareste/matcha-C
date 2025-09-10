@@ -17,6 +17,7 @@ typedef struct
     const char* request;
     size_t request_len;
     http_request_t parsed_request;
+    char* query;
     int uid;
     char* username;
     char* email;
