@@ -1,58 +1,76 @@
-- Install vite ->Done
-- Prepare dockers for front ->Done
+# Project Roadmap
 
+## ✅ Completed
+- [x] Install Vite  
+- [x] Prepare Docker for frontend  
 
-- Register -> pending scripts
-- Login -> pending scripts
-- Edit profile -> pending scripts and other options like age, preferences, tags, gender (to be explored)
+---
 
+## 🚧 In Progress / Pending
 
-- Profile preview
-- Profile preview other users + Like | Unlike | Disconect (Unmatch)
-- Users must be able to see:
-	who viewed their profile
-	who has “liked” them
-	public “fame rating”
+### Authentication & User Management
+- [ ] Register (pending scripts)  
+- [ ] Login (pending scripts)  
+- [ ] Edit profile (pending scripts + fields to explore: age, preferences, tags, gender)  
 
+### Profile Features
+- [ ] Profile preview (self)  
+- [ ] Profile preview (other users) + actions:  
+  - Like  
+  - Unlike  
+  - Disconnect (Unmatch)  
+- [ ] Users must be able to see:  
+  - Who viewed their profile  
+  - Who has “liked” them  
+  - Public “fame rating”  
 
-- GPS opt-in opt-out and manaully set location
+### Location
+- [ ] GPS opt-in / opt-out  
+- [ ] Manually set location  
 
+### Match System
+- [ ] Suggested profiles list  
+  - Sortable by: age, location, “fame rating”, common tags  
 
-- Match system:
-- List of suggested profiles:
-	- Suggested profiles must be sortable by age, location, “fame rating”, and common tags.
+### Browser (Advanced Search)
+- [ ] Search by criteria:  
+  - Specific age range  
+  - Fame rating range  
+  - Location  
+  - Interest tags (multiple)  
+- [ ] Filter results by:  
+  - Age  
+  - Location  
+  - Fame rating  
+  - Common tags  
 
+---
 
-- Browser:
-- Users must be able to perform an advanced search by selecting one or more criteria, such as:
-	• A specific age range.
-	• A “fame rating” range.
-	• A location.
-	• One or multiple interest tags
-- Users must be able to filter the list based on age, location, “fame rating" and common tags.
+## 🔍 Research & Investigation
+- [ ] Upload multiple images  
+- [ ] Socket.io integration  
+- [ ] Chat system creation  
 
+---
 
-- Investigate how to upload multiple images
-- Investigate socket.io
-- Investigate how to create a chat
+## 📲 App Features
+- [ ] In-app notifications  
+- [ ] Online status display  
+- [ ] Email verification & recovery  
+- [ ] Email notifications  
+- [ ] Notification settings  
+- [ ] Permissions system  
+- [ ] Report accounts  
+- [ ] Block accounts  
+- [ ] Navigation improvements  
+- [ ] Responsive design  
 
+---
 
-- Notifications (in app)
-- Online status (in app)
-
-
-- Email verify, recovery and email notifications
-- Notifications settings?
-
-
-- Permissions, report accounts, block accounts and navigation
-
-
-- Responsive
-
-
-- Bonus:
-- Add OmniAuth strategies for user authentication
-- Allow users to create a personal photo gallery with drag-and-drop upload and basic image editing (e.g., crop, rotate, apply filters).
-- Develop an interactive map of users, requiring more precise GPS localization via JavaScript.
-- Implement a feature to schedule and organize real-life dates or events for matched users.
+## 🎁 Bonus Features
+- [ ] Add OmniAuth strategies for user authentication  
+- [ ] Personal photo gallery  
+  - Drag-and-drop upload  
+  - Basic image editing (crop, rotate, filters)  
+- [ ] Interactive map of users (requires precise GPS via JavaScript)  
+- [ ] Schedule & organize real-life dates/events for matched users  

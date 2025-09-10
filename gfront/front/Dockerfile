@@ -6,5 +6,5 @@ COPY ./front /app/front
 RUN npm i vite@7.1.2
 RUN npm i tailwindcss @tailwindcss/vite@latest
 
-EXPOSE 3000
+EXPOSE 8000
 CMD ["sh", "-c", "cd front/src/pages && npm run dev"]
