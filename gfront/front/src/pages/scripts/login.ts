@@ -1,20 +1,17 @@
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createForm, createInp, createLab, createMain, createSpan } from "./cssTools";
+import { createBut, createDiv, createForm, createInp, createLab, createMain, createSpan, showError } from "./cssTools";
 
 initPage("login", () => {
-  const loginContainer = document.getElementById("login-container");
-  if (loginContainer) {
-    loginContainer.appendChild(renderLoginForm());
+	const loginContainer = document.getElementById("login-container");
 
-    const form = document.getElementById("login-form") as HTMLFormElement;
-    if (form) {
-      form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(form));
-        console.log("Login attempt:", data);
-      });
-    }
-  }
+	if (!loginContainer)
+	return;
+	loginContainer.appendChild(renderLoginForm());
+
+	const form = document.getElementById("loginForm") as HTMLFormElement;
+	if (form) {
+		setupLoginForm(form);
+	}
 });
 
 function renderLoginForm()
@@ -70,4 +67,67 @@ function renderLoginForm()
 	main.appendChild(main_div);
 
 	return main;
+}
+
+
+
+export function setupLoginForm(loginForm: HTMLFormElement) {
+
+	loginForm.addEventListener("submit", async (e) => {
+	e.preventDefault();
+
+	showError("userfail", "");
+	showError("username-error-check", "");
+	showError("pass-error-check", "");
+
+	const formData = new FormData(loginForm);
+	const username = (formData.get("user") as string)?.trim();
+	const password = (formData.get("pass") as string) ?? "";
+
+	let hasError = false;
+
+	//
+	if (!username) {
+		showError("username-error-check", "Username is required");
+		hasError = true;
+	}
+
+	//
+	if (!password) {
+		showError("pass-error-check", "Password is required");
+		hasError = true;
+	}
+
+	if (hasError) return;
+
+	try {
+		const res = await fetch("/api/login", { //proper url
+			method: "POST",
+			body: JSON.stringify({
+				username,
+				password ,
+			}),
+			headers: {
+				"Content-Type": "application/json",
+			},
+			credentials: "include",
+		});
+
+		if (!res.ok) {
+		showError("userfail", "Invalid username or password");
+		throw new Error(`Login failed - status ${res.status}`);
+		}
+
+		const data = await res.json();
+		console.log("Success:", data);
+		
+		// store info init socket etc??
+
+		//nav to dashboard or profile?
+
+	} catch (err) {
+		console.error("Error during login:", err);
+		showError("userfail", "Login failed. Please try again.");
+	}
+	});
 }

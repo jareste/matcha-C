@@ -17,10 +17,13 @@ export function checkValidEmail(email: string): boolean
 }
 
 
-export function checkValidPass(password: string): boolean
+export function checkValidPass(password: string, password2: string): boolean
 {
-	const trimmedPass = password.trim();
-	const passPattern = /^(?=.*?[0-9])(?=.*?[a-zA-Z])(?=.*?[^0-9A-Za-z]).{7,32}$/;
-
-	return (passPattern.test(trimmedPass));
+	if (password && password2 && password === password2)
+	{
+		const trimmedPass = password.trim();
+		const passPattern = /^(?=.*?[0-9])(?=.*?[a-zA-Z])(?=.*?[^0-9A-Za-z]).{7,32}$/;
+		return (passPattern.test(trimmedPass));
+	}
+	return (false);
 }

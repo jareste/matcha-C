@@ -1,20 +1,18 @@
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createForm, createInp, createLab, createListItem, createMain, createSpan, createUl } from "./cssTools";
+import { createBut, createDiv, createForm, createInp, createLab, createListItem, createMain, createSpan, createUl, showError } from "./cssTools";
+import { checkValidEmail, checkValidPass, checkValidUser } from "./regex";
 
 initPage("register", () => {
   const registerContainer = document.getElementById("register-container");
-  if (registerContainer) {
+  
+  if (!registerContainer)
+	return;
 	registerContainer.appendChild(renderRegisterForm());
 
-	const form = document.getElementById("register-form") as HTMLFormElement;
+	const form = document.getElementById("regForm") as HTMLFormElement;
 	if (form) {
-	  form.addEventListener("submit", (e) => {
-		e.preventDefault();
-		const data = Object.fromEntries(new FormData(form));
-		console.log("Register attempt:", data);
-	  });
+	  setupRegisterForm(form);
 	}
-  }
 });
 
 function renderRegisterForm()
@@ -43,7 +41,7 @@ function renderRegisterForm()
 
 	const user_div = createDiv("mb-4");
 	const user_label = createLab("Username", "username", "block text-blue font-bold mb-2");
-	const user_input = createInp("example username", "text", "user", "username", "box-blue text-gray-500 border rounded w-full py-2 px-3 leading-tight focus:outline-none");
+	const user_input = createInp("example username", "text", "username", "username", "box-blue text-gray-500 border rounded w-full py-2 px-3 leading-tight focus:outline-none");
 	user_input.setAttribute("required", "");
 	
 	const user_error_wrapper = createDiv("mb-1 h-4");
@@ -71,13 +69,13 @@ function renderRegisterForm()
 	//
 	const pass_div = createDiv("");
 	const pass_label = createLab("Password", "password", "block text-blue font-bold mb-2");
-	const pass_input = createInp("", "password", "pass", "password", "box-blue text-gray-500 shadow border rounded w-full py-2 px-3 leading-tight focus:outline-none");
+	const pass_input = createInp("", "password", "password", "password", "box-blue text-gray-500 shadow border rounded w-full py-2 px-3 leading-tight focus:outline-none");
 	pass_input.setAttribute("required", "");
 	
 
 	const passrep_div = createDiv("mt-2");
-	const passrep_input = createInp("repeat password", "password", "pass2", "password2", "box-blue text-gray-500 shadow border rounded w-full py-2 px-3 leading-tight focus:outline-none");
-	pass_input.setAttribute("required", "");
+	const passrep_input = createInp("repeat password", "password", "password2", "password2", "box-blue text-gray-500 shadow border rounded w-full py-2 px-3 leading-tight focus:outline-none");
+	passrep_input.setAttribute("required", "");
 
 	const pass_error_wrapper = createDiv("h-2");
 	const pass_error = createSpan("", "pass-error-check", "text-red-500 animate-fade-in text-xs italic hidden");
@@ -146,4 +144,106 @@ function renderRegisterForm()
 	main.appendChild(main_div);
 
 	return main;
+}
+
+
+
+// extra notes: submitter property of SubmitEvent tells you which button triggered the submit.
+
+export function setupRegisterForm(regForm: HTMLFormElement) {
+
+	regForm.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		
+		const formData = new FormData(regForm);
+		const email = (formData.get("email") as string)?.trim();
+		const username = (formData.get("username") as string)?.trim();
+		const name = (formData.get("name") as string)?.trim();
+		const lastname = (formData.get("lastname") as string)?.trim();
+		const password = (formData.get("password") as string) ?? "";
+		const password2 = (formData.get("password2") as string) ?? "";
+		
+		document.getElementById("userfail")?.classList.add("hidden");
+		document.getElementById("email-error-check")?.classList.add("hidden");
+		document.getElementById("user-error-check")?.classList.add("hidden");
+		document.getElementById("name-error-check")?.classList.add("hidden");
+		document.getElementById("lastname-error-check")?.classList.add("hidden");
+		document.getElementById("pass-error-check")?.classList.add("hidden");
+		
+		let hasError = false;
+		
+		//
+		if (!email) {
+			showError("email-error-check", "Email is required");
+			hasError = true;
+		} else if (!checkValidEmail(email)) {
+			showError("email-error-check", "Please enter a valid email address");
+			hasError = true;
+		}
+		
+		//
+		if (!username) {
+			showError("user-error-check", "Username is required");
+			hasError = true;
+		} else if (!checkValidUser(username)) {
+			showError("user-error-check", "Username must be 2-16 characters long");
+			hasError = true;
+		}
+
+		if (!name) {
+			showError("name-error-check", "Name is required");
+			hasError = true;
+		}
+
+		if (!lastname) {
+			showError("lastname-error-check", "Last name is required");
+			hasError = true;
+		}
+		
+		//
+		if (!password || !password2) {
+			showError("pass-error-check", "Password is required in both fields");
+			hasError = true;
+		} else if (!checkValidPass(password, password2)) {
+			showError("pass-error-check", "Passwords must meet the requirements and match each other");
+			hasError = true;
+		}
+
+		
+		if (hasError) return;
+		
+		try {
+			const res = await fetch(`/api/register`, { //pending proper url or whatever will be the path
+				method: "POST",
+				body: JSON.stringify({
+					username,
+					email,
+					password,
+					name,
+					lastname,
+				}),
+				headers: {
+					"Content-Type": "application/json",
+				},
+				credentials: 'include',
+			});
+			
+			if (!res.ok) {
+				showError("userfail", "Email or Username already in use");
+				throw new Error(`Request failed: ${res.status}`);
+			}
+			const data = await res.json();
+			console.log("Success:", data);
+
+			//localStorage.setItem( token?? , data.token??); Something similar?
+			
+			// store info init socket etc??
+
+			//nav to next setting page to fill extra info for profie
+			
+		} catch (err) {
+			console.error("Error during registration:", err);
+			showError("userfail", "Username or email is already in use");
+		}
+	});
 }
