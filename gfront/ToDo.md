@@ -9,8 +9,9 @@
 ## 🚧 In Progress / Pending
 
 ### Authentication & User Management
-- [ ] Register (pending scripts)  
-- [ ] Login (pending scripts)  
+- [x] Register (pending scripts)  
+- [x] Login (pending scripts)  
+- [ ] Set up extra profile    
 - [ ] Edit profile (pending scripts + fields to explore: age, preferences, tags, gender)  
 
 ### Profile Features
