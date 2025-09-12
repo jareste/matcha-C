@@ -3,15 +3,15 @@ import { createBut, createDiv, createForm, createInp, createLab, createListItem,
 import { checkValidEmail, checkValidPass, checkValidUser } from "./regex";
 
 initPage("register", () => {
-  const registerContainer = document.getElementById("register-container");
-  
-  if (!registerContainer)
-	return;
+	const registerContainer = document.getElementById("register-container");
+	
+	if (!registerContainer)
+		return;
 	registerContainer.appendChild(renderRegisterForm());
 
 	const form = document.getElementById("regForm") as HTMLFormElement;
 	if (form) {
-	  setupRegisterForm(form);
+		setupRegisterForm(form);
 	}
 });
 
@@ -158,8 +158,8 @@ export function setupRegisterForm(regForm: HTMLFormElement) {
 		const formData = new FormData(regForm);
 		const email = (formData.get("email") as string)?.trim();
 		const username = (formData.get("username") as string)?.trim();
-		const name = (formData.get("name") as string)?.trim();
-		const lastname = (formData.get("lastname") as string)?.trim();
+		const first_name = (formData.get("name") as string)?.trim();
+		const last_name = (formData.get("lastname") as string)?.trim();
 		const password = (formData.get("password") as string) ?? "";
 		const password2 = (formData.get("password2") as string) ?? "";
 		
@@ -190,12 +190,12 @@ export function setupRegisterForm(regForm: HTMLFormElement) {
 			hasError = true;
 		}
 
-		if (!name) {
+		if (!first_name) {
 			showError("name-error-check", "Name is required");
 			hasError = true;
 		}
 
-		if (!lastname) {
+		if (!last_name) {
 			showError("lastname-error-check", "Last name is required");
 			hasError = true;
 		}
@@ -213,14 +213,14 @@ export function setupRegisterForm(regForm: HTMLFormElement) {
 		if (hasError) return;
 		
 		try {
-			const res = await fetch(`/api/register`, { //pending proper url or whatever will be the path
+			const res = await fetch(`http://localhost:8080/api/register`, { //pending proper url or whatever will be the path
 				method: "POST",
 				body: JSON.stringify({
 					username,
 					email,
 					password,
-					name,
-					lastname,
+					first_name,
+					last_name,
 				}),
 				headers: {
 					"Content-Type": "application/json",

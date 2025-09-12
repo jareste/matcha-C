@@ -5,7 +5,7 @@ initPage("login", () => {
 	const loginContainer = document.getElementById("login-container");
 
 	if (!loginContainer)
-	return;
+		return;
 	loginContainer.appendChild(renderLoginForm());
 
 	const form = document.getElementById("loginForm") as HTMLFormElement;
@@ -62,32 +62,33 @@ function renderLoginForm()
 	form.appendChild(butt_div);
 	butt_div.appendChild(login_button);
 
-
+	
 	main_div.appendChild(form);
 	main.appendChild(main_div);
-
+	
 	return main;
 }
 
 
 
+// Back has to change to username. ill change here to email to complete login for now.
 export function setupLoginForm(loginForm: HTMLFormElement) {
-
+	
 	loginForm.addEventListener("submit", async (e) => {
-	e.preventDefault();
+		e.preventDefault();
 
 	showError("userfail", "");
 	showError("username-error-check", "");
 	showError("pass-error-check", "");
 
 	const formData = new FormData(loginForm);
-	const username = (formData.get("user") as string)?.trim();
+	const email = (formData.get("user") as string)?.trim();
 	const password = (formData.get("pass") as string) ?? "";
 
 	let hasError = false;
 
 	//
-	if (!username) {
+	if (!email) {
 		showError("username-error-check", "Username is required");
 		hasError = true;
 	}
@@ -101,10 +102,10 @@ export function setupLoginForm(loginForm: HTMLFormElement) {
 	if (hasError) return;
 
 	try {
-		const res = await fetch("/api/login", { //proper url
-			method: "POST",
+		const res = await fetch("http://localhost:8080/api/login", { //proper url
+			method: "POST", 
 			body: JSON.stringify({
-				username,
+				email,
 				password ,
 			}),
 			headers: {
@@ -124,6 +125,7 @@ export function setupLoginForm(loginForm: HTMLFormElement) {
 		// store info init socket etc??
 
 		//nav to dashboard or profile?
+		window.location.href = "/profile";
 
 	} catch (err) {
 		console.error("Error during login:", err);
