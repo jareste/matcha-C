@@ -13,8 +13,9 @@ initPage("profile-setup", () => {
 
 
 
-// Investigating drag & drop features. 
+// Investigating drag & drop features. //https://www.youtube.com/watch?v=gjiu9kB7fQc //https://stackabuse.com/drag-and-drop-in-vanilla-javascript/ 
 function renderProfileSetup(): HTMLDivElement {
+	let draggedIndex: number | null = null;
   const main = createDiv("");
 
   const upload_group = createDiv("");
@@ -47,9 +48,40 @@ function renderProfileSetup(): HTMLDivElement {
 
       reader.onload = (e) => {
         const wrapper = document.createElement("div");
+		wrapper.draggable = true;
+		wrapper.dataset.index = index.toString();
         wrapper.style.position = "relative";
         wrapper.style.display = "inline-block";
         wrapper.style.margin = "5px";
+		wrapper.classList.add("cursor-move");
+
+		wrapper.addEventListener("dragstart", () => {
+  draggedIndex = index;
+  wrapper.classList.add("opacity-50"); // visual feedback
+});
+
+wrapper.addEventListener("dragend", () => {
+  wrapper.classList.remove("opacity-50");
+  draggedIndex = null;
+});
+
+wrapper.addEventListener("dragover", (e) => {
+  e.preventDefault(); // allow drop
+});
+
+wrapper.addEventListener("drop", (e) => {
+  e.preventDefault();
+  if (draggedIndex === null) return;
+
+  const targetIndex = index;
+
+  // Swap the files in the array
+  const temp = images[draggedIndex];
+  images[draggedIndex] = images[targetIndex];
+  images[targetIndex] = temp;
+
+  renderPreviews(); // re-render previews in new order
+});
 
         const img = document.createElement("img");
         img.src = e.target?.result as string;

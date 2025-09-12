@@ -82,3 +82,17 @@
  	color: #FF6B35;
  	background-color: #CACACA;
 }
+
+
+.drop-zone {
+  border: 2px dashed #aaa;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s ease-in-out;
+}
+
+.drop-zone.dragover {
+  background: #f0f0f0;
+}
