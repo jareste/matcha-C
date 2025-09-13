@@ -73,6 +73,11 @@ message_t_array *db_tmessage_select_by_recipient(DB_ID DB, int recipient_id);
 message_t_array* db_tmessage_select_by_sender_and_recipient(DB_ID DB, int sender_id, int recipient_id);
 
 /*
+ * Select messages in a specific chat by chat ID
+ */
+message_t_array* db_tmessage_select_by_chat_id(DB_ID DB, int chat_id);
+
+/*
  * Print a message_t
  */
 void db_tmessage_print(message_t *m);

@@ -48,7 +48,7 @@ def do_register(session):
 def do_get_chat_messages(session):
     print("-- Get Chat Messages --")
     chat_id = input("Chat ID: ").strip()
-    resp = session.get(f"{BASE_URL}/api/chat/{chat_id}")
+    resp = session.get(f"{BASE_URL}/api/chat/messages/?id={chat_id}")
     print(resp.status_code, resp.text)
 
 def do_login(session):
@@ -178,7 +178,7 @@ def print_menu():
     print("4) Logout (/api/logout)")
     print("5) Connect WebSocket (/ws)")
     print("6) Connect Socket.IO (/socket.io)")
-    print("7) Get Chat Messages (/api/chat/:chat_id)")
+    print("7) Get Chat Messages (/api/chat/messages/?id=<chat_id>)")
     print("0) Exit")
 
 

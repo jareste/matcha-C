@@ -1,4 +1,5 @@
 #include "db_table_message.h"
+#include "../../../inc/ft_malloc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -173,7 +174,9 @@ message_t_array* db_tmessage_select_by_sender_and_recipient(DB_ID DB, int sender
 
     const char *sql =
       "SELECT id,sender_id,recipient_id,content,sent_at,is_read "
-      "FROM messages WHERE sender_id = $1 AND recipient_id = $2 ORDER BY sent_at DESC;";
+      "FROM messages "
+      "WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1) "
+      "ORDER BY sent_at DESC;";
 
     res = db_query(DB, sql, 2, params);
     if (!res) return NULL;

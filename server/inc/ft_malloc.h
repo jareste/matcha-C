@@ -17,6 +17,8 @@
         }
 #endif
 
+#define ASSERT(expr) ft_assert(expr, #expr)
+
 #define NEW(type, count) ({ \
     type* ptr_new = (type*)ft_malloc(sizeof(type) * (count)); \
     memset(ptr_new, 0, sizeof(type) * (count)); \

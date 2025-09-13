@@ -88,8 +88,7 @@ void api_umgmt_register(void* _ctx, void *user_data)
         router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
                                       "{\"error\":\"Last name is required\"}", NULL);
         goto cleanup;
-    }
-
+    }   
     new_user.username = username_item->valuestring;
     new_user.email = email_item->valuestring;
     password = password_item->valuestring;

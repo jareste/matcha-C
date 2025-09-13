@@ -40,6 +40,7 @@ typedef enum
     FLAG_NONE = 0x00,
     AUTH_REQUIRED = 0x01,
     LOCAL_REQUEST = 0x02,
+    QUERY_NEEDED = 0x04
 } http_request_flags_t;
 
 typedef struct route_entry

@@ -129,6 +129,7 @@ re: fclean all
 		echo ".gitignore" >> .gitignore; \
 		echo "log.txt" >> .gitignore; \
 		echo "*.o" >> .gitignore; \
+		echo "cookies.pkl" >> .gitignore; \
 		echo ".gitignore created and updated with entries."; \
 	else \
 		echo ".gitignore already exists."; \

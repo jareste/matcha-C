@@ -253,12 +253,15 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     char first_line[256] = {0};
     char* space_pos = NULL;
     char* route_end = NULL;
+    char* route_query = NULL;
     size_t first_line_len = 0;
     route_entry_t* route_entry = NULL;
     http_request_ctx_t request_ctx;
     char* origin;
     char* method = NULL;
     int rc;
+    size_t len;
+
 
     first_line_end = strstr(request, "\r\n");
     if (first_line_end)
@@ -276,6 +279,18 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
             route_end = strchr(route, ' ');
             if (route_end)
                 *route_end = '\0';
+
+            route_query = strchr(route, '?');
+            if (route_query)
+            {
+                *route_query = '\0';
+                route_query++;
+            }
+
+            len = strlen(route);
+            route_end = (char*)(route + len - 1);
+            if (len > 1 && *route_end == '/')
+                *route_end = '\0';
         }
     }
 
@@ -284,10 +299,19 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
 
     route_entry = router_http_find(route);
     if (!route_entry)
+    {
+        log_msg(LOG_LEVEL_ERROR, "No route found for path: %s\n", route);
         return router_http_generate_response(fd, CODE_404_NOT_FOUND, "{\"error\": \"Not Found\"}", NULL);
+    }
 
     if (!route_entry->handler)
         return router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}", NULL);
+
+    if ((route_entry->flags & QUERY_NEEDED) && !route_query)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Route %s requires query parameters but none found\n", route);
+        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request - Missing Query Parameters\"}", NULL);
+    }
 
     origin = get_header_value(request, "Origin");
     if (!origin) origin = strdup("http://localhost:8000"); /* error instead ? */
@@ -310,6 +334,7 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     request_ctx.fd = fd;
     request_ctx.request = request;
     request_ctx.request_len = request_len;
+    request_ctx.query = route_query;
 
     if (route_entry->flags & AUTH_REQUIRED)
     {
