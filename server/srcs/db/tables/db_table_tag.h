@@ -68,7 +68,11 @@ int             db_ttag_free_array(tag_t_array* arr);
  */
 int             db_ttag_insert_user_tag(DB_ID DB, int user_id, int tag_id);
 user_tag_array* db_ttag_select_tags_for_user(DB_ID DB, int user_id);
+tag_t_array*    db_ttag_select_tag_objects_for_user(DB_ID DB, int user_id);
 int             db_ttag_delete_user_tag(DB_ID DB, int user_id, int tag_id);
 int             db_ttag_free_map_array(user_tag_array *arr);
+
+
+void db_ttag_insert_default_tags(DB_ID DB);
 
 #endif /* DB_TABLE_TAG_H */

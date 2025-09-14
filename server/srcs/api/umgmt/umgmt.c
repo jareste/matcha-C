@@ -340,4 +340,3 @@ void api_umgmt_init()
     router_http_add("/api/validate", api_umgmt_validate, NULL, AUTH_REQUIRED);
     router_http_add("/api/logout", api_umgmt_logout, NULL, AUTH_REQUIRED);
 }
-

@@ -5,6 +5,8 @@ SRC =	api.c \
 		umgmt/umgmt.c \
 		umgmt/token.c \
 		chat/chat.c \
+		profile/profile.c \
+		tags/tags.c
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs

@@ -7,6 +7,7 @@ from getpass import getpass
 import requests
 import socketio
 import websockets
+import time
 
 # Constants
 BASE_URL = "http://localhost:8080"
@@ -49,6 +50,32 @@ def do_get_chat_messages(session):
     print("-- Get Chat Messages --")
     chat_id = input("Chat ID: ").strip()
     resp = session.get(f"{BASE_URL}/api/chat/messages/?id={chat_id}")
+    print(resp.status_code, resp.text)
+
+def do_get_insert_tags(session):
+    print("-- Insert Tags --")
+    tags = input("Tags (comma-separated): ").strip()
+
+    try:
+        tags_list = [int(tag.strip()) for tag in tags.split(",") if tag.strip().isdigit()]
+    except ValueError:
+        print("Invalid input. Please enter only numeric tags.")
+        return
+
+    resp = session.post(f"{BASE_URL}/api/tags/insert", json={"tags": tags_list})
+    print(resp.status_code, resp.text)
+
+def do_get_user_profile(session):
+    print("-- Get User Profile --")
+    user_id = input("User ID: ").strip()
+    start_time = time.time()  # Record the start time
+    if user_id.isdigit() and int(user_id) > 0:
+        resp = session.get(f"{BASE_URL}/api/profile/get/?id={user_id}")
+    else:
+        resp = session.get(f"{BASE_URL}/api/profile/get")
+    end_time = time.time()  # Record the end time
+    elapsed_time = end_time - start_time  # Calculate the elapsed time
+    print(f"Response time: {elapsed_time:.2f} seconds")  # Print the response time
     print(resp.status_code, resp.text)
 
 def do_login(session):
@@ -179,6 +206,8 @@ def print_menu():
     print("5) Connect WebSocket (/ws)")
     print("6) Connect Socket.IO (/socket.io)")
     print("7) Get Chat Messages (/api/chat/messages/?id=<chat_id>)")
+    print("8) Get User Profile (/api/profile/get/?id=<user_id>)")
+    print("9) Insert Tags (/api/tags/insert)")
     print("0) Exit")
 
 
@@ -192,6 +221,8 @@ def main():
         "5": ws_mode,
         "6": sio_mode,
         "7": lambda: do_get_chat_messages(session),
+        "8": lambda: do_get_user_profile(session),
+        "9": lambda: do_get_insert_tags(session),
     }
     while True:
         print_menu()
