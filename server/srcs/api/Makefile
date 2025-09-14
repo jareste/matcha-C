@@ -6,13 +6,14 @@ SRC =	api.c \
 		umgmt/token.c \
 		chat/chat.c \
 		profile/profile.c \
-		tags/tags.c
+		tags/tags.c \
+		pics/pics.c
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs
 OBJ_DIR = objs
 
-CFLAGS += -I../../inc -I/usr/include/postgresql -I$(HOME)/postgresql/include
+CFLAGS += -I../../inc -I/usr/include/postgresql -I$(HOME)/postgresql/include -DPICS_DIR=\"/tmp/matCha/uploads\"
 
 all: $(NAME)
 

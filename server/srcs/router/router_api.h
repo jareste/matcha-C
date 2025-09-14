@@ -2,6 +2,7 @@
 #define ROUTER_API_H
 
 #include "../../third_party/uthash-master/src/uthash.h"
+#include <stdbool.h>
 
 typedef struct
 {
@@ -9,6 +10,8 @@ typedef struct
     char* route;
     char* headers;
     char* body;
+    size_t body_len;
+    bool is_binary;
 } http_request_t;
 
 typedef struct 

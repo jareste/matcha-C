@@ -32,4 +32,8 @@
 void* ft_malloc(size_t size);
 void* ft_realloc(void *ptr, size_t size);
 char* ft_strdup(const char *s);
+
+void *ft_memmem(const void *haystack, size_t haystacklen,
+                const void *needle, size_t needlelen);
+
 #endif /* FT_MALLOC_H */

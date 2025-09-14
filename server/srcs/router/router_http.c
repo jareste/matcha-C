@@ -77,7 +77,8 @@ char* get_header_value(const char *req, const char *key)
     while (*p==' '||*p=='\t') p++;
 
     end = strstr(p, "\r\n");
-    if (!end) return NULL;
+    if (!end)
+        end = p + strlen(p); /* Review it. before it was simply returning NULL. */
 
     len = end - p;
     out = malloc(len+1);
@@ -170,8 +171,11 @@ int router_parse_http_request(const char* request, size_t request_len, http_requ
     const char* space2;
     const char* headers_end;
     const char* body_start;
+    char* content_type;
+    char *tmp;
     size_t headers_len;
     size_t line_len;
+    size_t body_len;
 
     if (!request || (request_len == 0) || !out_request)
         return ERROR;
@@ -203,11 +207,56 @@ int router_parse_http_request(const char* request, size_t request_len, http_requ
     headers_len = headers_end - (first_line_end + 2);
     out_request->headers = strndup(first_line_end + 2, headers_len);
 
+    content_type = get_header_value(out_request->headers, "Content-Type");
+    if (content_type)
+    {
+        log_msg(LOG_LEVEL_DEBUG, "Content-Type: %s\n", content_type);
+
+        if (strstr(content_type, "application/json"))
+        {
+            log_msg(LOG_LEVEL_DEBUG, "Detected JSON content\n");
+            out_request->is_binary = false;
+        }
+        else if (strstr(content_type, "multipart/form-data") || strstr(content_type, "application/octet-stream"))
+        {
+            log_msg(LOG_LEVEL_DEBUG, "Detected binary content\n");
+            out_request->is_binary = true;
+        }
+        else
+        {
+            log_msg(LOG_LEVEL_WARN, "Unknown Content-Type: %s\n", content_type);
+            out_request->is_binary = false;
+        }
+
+        free(content_type);
+    }
+    else
+    {
+        log_msg(LOG_LEVEL_WARN, "No Content-Type header found\n");
+        out_request->is_binary = false;
+    }
+
     body_start = headers_end + 4;
     if ((size_t)(body_start - request) < request_len)
-        out_request->body = strndup(body_start, request + request_len - body_start);
+    {
+        body_len = request_len - (body_start - request);
+        out_request->body = malloc(body_len);
+
+        memcpy(out_request->body, body_start, body_len);
+        out_request->body_len = body_len;
+
+        if (!out_request->is_binary)
+        {
+            tmp = realloc(out_request->body, body_len + 1);
+            out_request->body = tmp;
+            out_request->body[body_len] = '\0';
+        }
+    }
     else
+    {
         out_request->body = NULL;
+        out_request->body_len = 0;
+    }
 
     return SUCCESS;
 }
@@ -351,7 +400,14 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     }
 
     /* Populate request ctx */
-    router_parse_http_request(request, request_len, &request_ctx.parsed_request);
+    if (router_parse_http_request(request, request_len, &request_ctx.parsed_request) != SUCCESS)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to parse HTTP request\n");
+        log_msg(LOG_LEVEL_DEBUG, "Request was:\n%s\n", request);
+        if (request_ctx.username) free(request_ctx.username);
+        if (request_ctx.email) free(request_ctx.email);
+        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}", NULL);
+    }
 
     /* call the handler */
     route_entry->handler(&request_ctx, route_entry->user_data);

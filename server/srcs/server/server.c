@@ -25,6 +25,8 @@
 #define SERVER_KEY "SOME_KEY"
 #define MAX_LOGIN_ROLES 3
 
+#define DYNAMIC_RCV
+
 #define REMOVE_CLIENT(fd)                                  \
   do {                                                     \
     client_t *_c;                                          \
@@ -468,9 +470,121 @@ int init_plain_socket(int port)
     return sockfd;
 }
 
+#ifdef DYNAMIC_RCV
+static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_size)
+{
+    const size_t CHUNK = 4096;
+    size_t cap = CHUNK;
+    size_t len = 0;
+    size_t header_len;
+    size_t content_len;
+    size_t need;
+    size_t grow;
+    char* buf = *out_buf;
+    char* tmp;
+    char* headers_end;
+    char* content_len_hdr;
+    char* p;
+    ssize_t n;
+    int headers_found = 0;
+    size_t headers_end_off = 0;
+
+    if (!buf || (*out_len > CHUNK))
+    {
+        buf = realloc(buf, CHUNK);
+        *out_buf = buf;
+    }
+
+    for (;;)
+    {
+        if (len == cap)
+        {
+            if (cap > max_size - CHUNK)
+                return ERROR;
+
+            cap += CHUNK;
+            tmp = realloc(buf, cap);
+            if (!tmp)
+                return ERROR;
+
+            buf = tmp;
+        }
+
+        n = recv(fd, buf + len, cap - len, 0);
+        if (n <= 0)
+            return ERROR;
+        len += (size_t)n;
+
+        headers_end = NULL;
+        if (!headers_found && len >= 4)
+        {
+            headers_end = ft_memmem(buf, len, "\r\n\r\n", 4);
+            if (headers_end)
+            {
+                headers_found = 1;
+                headers_end_off = (headers_end - buf) + 4;
+                break;
+            }
+        }
+    }
+
+    header_len = headers_end_off;
+    content_len_hdr = ft_memmem(buf, header_len, "Content-Length:", 15);
+    content_len = 0;
+
+    if (content_len_hdr)
+    {
+        p = content_len_hdr + 15;
+        while (p < (buf + header_len) && (*p == ' ' || *p == '\t'))
+            p++;
+        content_len = (size_t) strtoul(p, NULL, 10);
+    }
+    else
+    {
+        return ERROR;
+    }
+
+    need = headers_end_off + content_len;
+    if (need > max_size)
+    {
+        return ERROR;
+    }
+
+    while (len < need)
+    {
+        if (len == cap)
+        {
+            grow = (need - cap) > CHUNK ? CHUNK : (need - cap);
+            if (cap > max_size - grow)
+            {
+                return ERROR;
+            }
+            cap += grow;
+            tmp = realloc(buf, cap);
+            buf = tmp;
+        }
+        n = recv(fd, buf + len, cap - len, 0);
+        if (n <= 0)
+        {
+            return ERROR;
+        }
+        len += (size_t)n;
+    }
+
+    *out_buf = buf;
+    *out_len = need;
+    return SUCCESS;
+}
+#endif
+
 int m_handle_client_event(int fd)
 {
-    char buf[4096];
+#ifdef DYNAMIC_RCV
+    static char* buf = NULL;
+    static size_t buf_len = 4096;
+#else
+    char buf[16384]; /* TODO review further */
+#endif
     int ret;
     client_t* c;
 
@@ -490,15 +604,22 @@ int m_handle_client_event(int fd)
     if (c->state == CS_SIO_WS_OPEN) 
         return m_sio_ws_handle_frame(c);
 
+#ifdef DYNAMIC_RCV
+    ret = recv_all_request(fd, &buf, &buf_len, 4 * 1024 * 1024); /* max 4MB */
+    if (ret != SUCCESS)
+#else
     ret = recv(fd, buf, sizeof(buf) - 1, 0);
     if (ret <= 0)
+#endif
     {
         log_msg(LOG_LEVEL_INFO, "Client disconnected or error: fd=%d\n", fd);
         REMOVE_CLIENT(fd);
         return SUCCESS;
     }
 
+#ifndef DYNAMIC_RCV
     buf[ret] = '\0';
+#endif
 
     if (m_is_sio_path(buf))
     {
@@ -520,7 +641,11 @@ int m_handle_client_event(int fd)
     }
     else if (m_http_request_handler)
     {
+#ifdef DYNAMIC_RCV
+        ret = m_http_request_handler(fd, buf, buf_len);
+#else
         ret = m_http_request_handler(fd, buf, ret);
+#endif
         if (ret == ERROR)
         {
             log_msg(LOG_LEVEL_ERROR, "Error handling HTTP request for fd=%d\n", fd);
