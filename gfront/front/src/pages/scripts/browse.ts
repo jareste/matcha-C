@@ -13,3 +13,5 @@ function renderBrowseContent()
 	// work with proper ts builders from cssTools
 	return '';
 }
+
+// https://www.w3schools.com/howto/howto_css_searchbar.asp

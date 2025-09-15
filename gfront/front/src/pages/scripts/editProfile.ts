@@ -16,9 +16,9 @@ const testprofile: Profile =
 	"email": "jane.doe@example.com",
 	"first_name": "Jane",
 	"last_name": "Doe",
-	"gender": "Female",
-	"age": "28",
-	"orientation": "Bisexual",
+	"gender": "3",
+	"age": "",
+	"orientation": "2",
 	"bio": "Adventure enthusiast and coffee lover. Always up for hiking trips and deep conversations!",
 	"fame_rating": "4.7",
 	"gps_lat": "40.7128",
@@ -47,12 +47,17 @@ const testprofile: Profile =
 });
 
 
-//Need to transform all to input fields with a button on its side to modify each field
+
+// Te idea is that this form will replace user profile when it clicks the edit button instead of having its own page.
+// Need to transform all to input fields with a button on its side to modify each field
+// What will happen if a field is invalid? how sould we act? discard everything? push the changes that are valid only?
 function renderTestEdit(profile:Profile)
 {
-	
+	// create the form :)
 	const card = createDiv("container mx-auto rounded-2xl overflow-hidden shadow-lg bg-white border");
 
+
+	// Need to investigate how to build the drag n drop feature properly for this field and that it shows properly.
 	const imgWrapper = createDiv("overflow-hidden");
 	const img = createImage(`${profile.profpic}`,`${profile.first_name} ${profile.last_name}`,"w-full h-full object-cover object-center");
 	imgWrapper.appendChild(img);
@@ -61,19 +66,22 @@ function renderTestEdit(profile:Profile)
 	const info = createDiv("p-4");
 
 
-	const header = createDiv("flex items-center flex justify-between gap-2");
+	const header = createDiv("flex justify-start gap-2");
 
-	const name = createInp("", "text", "name", "name", "text-xl font-semibold min-w-[100px] max-w-[400px]");
+	// Need to investigate why it expands whenever it wants
+	const name = createInp("", "text", "name", "name", "text-xl font-semibold min-w-[50px] max-w-[100px]");
 	name.value = `${profile.first_name}` || "";
 	name.readOnly = true;
 
 	
-	const last_name = createInp("", "text", "last_name", "last_name", "text-xl font-semibold min-w-[100px] max-w-[400px]");
+	const last_name = createInp("", "text", "last_name", "last_name", "text-xl font-semibold min-w-[50px] max-w-[100px]");
 	last_name.value = `${profile.last_name}` || "";
 	last_name.readOnly = true;
 
-
-	const age = createSpan(`${profile.age}`, "", "text-gray-500 text-lg");
+	// I hate data input... depends on browser language to struct day month year...
+	const age = createInp("", "date", "age", "age", "text-gray-500 text-lg");
+	age.value = `${profile.age}` || "N/A";
+	name.readOnly = true;
 	
 	header.appendChild(name);
 	header.appendChild(last_name);
@@ -84,15 +92,53 @@ function renderTestEdit(profile:Profile)
 	// meta.textContent = `• ⭐ ${profile.fame_rating}`;
 
 
-	const orientation = createP(`${profile.gender} • ${profile.orientation}`,"text-gray-600 text-sm mt-1");
+	// const orientation = createP(`${profile.gender} • ${profile.orientation}`,"text-gray-600 text-sm mt-1");
+	const orient_div = createDiv("text-gray-600 text-sm mt-1 flex");
+	const genderSelect = createSelect("gender","",
+		[
+			{value: "0", text: ""},
+			{value: "1", text: "Not specified"},
+			{value: "2", text: "Non-binary"},
+			{value: "3", text: "Female"},
+			{value: "4", text: "Male"},
+		]
+	);
+	genderSelect.value = profile.gender || "0";
+
+	const orient_div_spl = createDiv("text-gray-600 text-sm ml-2 mr-2");
+	orient_div_spl.textContent = "•";
+	const orientSelect = createSelect("orient","",
+		[
+			{value: "0", text: ""},
+			{value: "1", text: "Not specified"},
+			{value: "2", text: "Bisexual"},
+			{value: "3", text: "Women"},
+			{value: "4", text: "Men"},
+		]
+	);
+	orientSelect.value = profile.orientation || "0";
 
 
+	orient_div.appendChild(genderSelect);
+	orient_div.appendChild(orient_div_spl);
+	orient_div.appendChild(orientSelect);
+
+
+	// To read for proper input box expansion: https://css-tricks.com/auto-growing-inputs-textareas/ 
+	// Need to specify max bio lenght
 	const aboutWrapper = createDiv("mt-4");
 	const aboutTitle = createH3("About me", "font-semibold text-gray-800");
-	const aboutText = createP(`${profile.bio}`,"text-gray-600 text-sm mt-1 leading-relaxed");
+	const aboutText = createInp("", "text", "bio", "bio", "text-gray-600 text-sm mt-1 leading-relaxed w-full")
+	aboutText.value = `${profile.bio}` || "Explain others about yourself";
+	aboutText.readOnly = true;
+	
 	aboutWrapper.appendChild(aboutTitle);
 	aboutWrapper.appendChild(aboutText);
 
+
+
+	// Idea for tags: https://tailwindcss.com/plus/ui-blocks/application-ui/forms/checkboxes
+	// Other option: https://www.w3schools.com/howto/howto_css_searchbar.asp
 
 	const tagsWrapper = createDiv("mt-4");
 	const tagsTitle = createH3("Interests", "font-semibold text-gray-800");
@@ -112,7 +158,7 @@ function renderTestEdit(profile:Profile)
 
 	info.appendChild(header);
 	// info.appendChild(meta);
-	info.appendChild(orientation);
+	info.appendChild(orient_div);
 	info.appendChild(aboutWrapper);
 	info.appendChild(tagsWrapper);
 
@@ -123,10 +169,27 @@ function renderTestEdit(profile:Profile)
 	card.appendChild(info);
 	// card.appendChild(buttonsWrapper);
 
+	[name, last_name, age, aboutText].forEach(inp => {
+		inp.addEventListener("click", () => {
+			inp.readOnly = false;
+			inp.focus();
+		});
+
+		inp.addEventListener("blur", () => {
+			inp.readOnly = true;
+		});
+
+		// inp.addEventListener("input", () => {
+		// 	inp.style.width = "auto"; // testing!!
+		// 	inp.style.width = Math.min(inp.scrollWidth + 8, 200) + "px";
+		// });
+	});
 	return card;
 }
 
 
+
+//	from this, the idea is to only keep username email and password forms.
 function renderEditForm(user:Profile)
 {
 
@@ -352,7 +415,7 @@ function renderEditForm(user:Profile)
 
 
 
-// Forms manipulation 
+// Forms manipulation // might discard after some tests XD
 /*
 
 const label = document.createElement("label");

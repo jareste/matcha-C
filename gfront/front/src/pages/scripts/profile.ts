@@ -101,8 +101,8 @@ function renderProfileContent(profile: Profile)
 	tagsWrapper.appendChild(tagsContainer);
 
 	const buttonsWrapper = createDiv("mt-4 mb-4 flex justify-evenly");
-	const like = createBut("♥", "like", "text-green-500 text-4xl");
-	const reject = createBut("✖", "reject", "text-red-500 text-4xl");
+	const like = createBut("♥", "like", "text-green-500 text-4xl"); // need to investigate how to use svg
+	const reject = createBut("✖", "reject", "text-red-500 text-4xl"); // need to investigate how to use svg
 	
 
 	info.appendChild(header);
