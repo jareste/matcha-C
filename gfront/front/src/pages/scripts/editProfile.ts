@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createForm, createImage, createInp, createLab, createListItem, createMain, createSelect, createSpan, createUl, truncateText } from "./cssTools";
+import { createBut, createDiv, createForm, createH2, createH3, createImage, createInp, createLab, createListItem, createMain, createP, createSelect, createSpan, createUl, truncateText } from "./cssTools";
 import type { Profile } from "./profile";
 
 initPage("edit", () => {
@@ -9,21 +9,31 @@ initPage("edit", () => {
 	/// Testing!!
 	
 	
-	const bob: Profile = 
-	{
-		id: "1234",
-		username: "bobobo",
-		email: "bob@bob.com",
-		first_name: "Bob",
-		last_name: "man",
-		profpic: "",
-		bio: "amazing spiderman",
-		hashtags: [],
-	};
+const testprofile: Profile = 
+{
+	"id": "550e8400-e29b-41d4-a716-446655440000",
+	"username": "jane_doe42",
+	"email": "jane.doe@example.com",
+	"first_name": "Jane",
+	"last_name": "Doe",
+	"gender": "Female",
+	"age": "28",
+	"orientation": "Bisexual",
+	"bio": "Adventure enthusiast and coffee lover. Always up for hiking trips and deep conversations!",
+	"fame_rating": "4.7",
+	"gps_lat": "40.7128",
+	"gps_lon": "-74.0060",
+	"location_optout": false,
+	"last_online": "2024-01-15T14:30:00Z",
+	"profpic": "https://wallpapercave.com/wp/wp1845166.jpg",//"https://images.unsplash.com/photo-1587778082149-bd5b1bf5d3fa?q=80&w=987&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D",
+	"images": ["https://images.unsplash.com/photo-1595871465907-19020bb76ad1?q=80&w=987&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D","https://images.unsplash.com/photo-1587584867790-cf443d163e87?q=80&w=987&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D","https://images.unsplash.com/photo-1593839686924-4b344fac3f8f?q=80&w=987&auto=format&fit=crop&ixlib=rb-4.1.0&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D"],
+	"hashtags": ["#travel","#hiking","#coffee","#photography","#nature"]
+}
 
 	/////////////
 
-	editContainer.appendChild(renderEditForm(bob));
+	editContainer.appendChild(renderEditForm(testprofile));
+	editContainer.appendChild(renderTestEdit(testprofile));
 
 	const form = document.getElementById("edit-form") as HTMLFormElement;
 	if (form) {
@@ -36,6 +46,85 @@ initPage("edit", () => {
   }
 });
 
+
+//Need to transform all to input fields with a button on its side to modify each field
+function renderTestEdit(profile:Profile)
+{
+	
+	const card = createDiv("container mx-auto rounded-2xl overflow-hidden shadow-lg bg-white border");
+
+	const imgWrapper = createDiv("overflow-hidden");
+	const img = createImage(`${profile.profpic}`,`${profile.first_name} ${profile.last_name}`,"w-full h-full object-cover object-center");
+	imgWrapper.appendChild(img);
+
+
+	const info = createDiv("p-4");
+
+
+	const header = createDiv("flex items-center flex justify-between gap-2");
+
+	const name = createInp("", "text", "name", "name", "text-xl font-semibold min-w-[100px] max-w-[400px]");
+	name.value = `${profile.first_name}` || "";
+	name.readOnly = true;
+
+	
+	const last_name = createInp("", "text", "last_name", "last_name", "text-xl font-semibold min-w-[100px] max-w-[400px]");
+	last_name.value = `${profile.last_name}` || "";
+	last_name.readOnly = true;
+
+
+	const age = createSpan(`${profile.age}`, "", "text-gray-500 text-lg");
+	
+	header.appendChild(name);
+	header.appendChild(last_name);
+	header.appendChild(age);
+
+
+	// const meta = createDiv("text-sm text-gray-600 mt-1"); Pending
+	// meta.textContent = `• ⭐ ${profile.fame_rating}`;
+
+
+	const orientation = createP(`${profile.gender} • ${profile.orientation}`,"text-gray-600 text-sm mt-1");
+
+
+	const aboutWrapper = createDiv("mt-4");
+	const aboutTitle = createH3("About me", "font-semibold text-gray-800");
+	const aboutText = createP(`${profile.bio}`,"text-gray-600 text-sm mt-1 leading-relaxed");
+	aboutWrapper.appendChild(aboutTitle);
+	aboutWrapper.appendChild(aboutText);
+
+
+	const tagsWrapper = createDiv("mt-4");
+	const tagsTitle = createH3("Interests", "font-semibold text-gray-800");
+	const tagsContainer = createDiv("flex flex-wrap gap-2 mt-2");
+	profile.hashtags?.forEach((tag) => {
+		tagsContainer.appendChild(
+			createSpan(tag, "", "px-3 py-1 bg-gray-100 rounded-full text-sm text-gray-700")
+		);
+	});
+	tagsWrapper.appendChild(tagsTitle);
+	tagsWrapper.appendChild(tagsContainer);
+
+	// const buttonsWrapper = createDiv("mt-4 mb-4 flex justify-evenly");
+	// const like = createBut("♥", "like", "text-green-500 text-4xl");
+	// const dislike = createBut("✖", "dislike", "text-red-500 text-4xl");
+	
+
+	info.appendChild(header);
+	// info.appendChild(meta);
+	info.appendChild(orientation);
+	info.appendChild(aboutWrapper);
+	info.appendChild(tagsWrapper);
+
+	// buttonsWrapper.appendChild(dislike);
+	// buttonsWrapper.appendChild(like);
+
+	card.appendChild(imgWrapper);
+	card.appendChild(info);
+	// card.appendChild(buttonsWrapper);
+
+	return card;
+}
 
 
 function renderEditForm(user:Profile)
@@ -259,4 +348,36 @@ function renderEditForm(user:Profile)
 	return main;
 }
 
+
+
+
+
+// Forms manipulation 
+/*
+
+const label = document.createElement("label");
+label.textContent = "Name:";
+label.className = "block text-blue-600 font-bold mb-2";
+container.appendChild(label);
+
+
+const input = document.createElement("input");
+input.type = "text";
+input.value = user?.name || "";
+input.readOnly = true;
+input.className = "border rounded w-full py-2 px-3 text-gray-700 focus:outline-none";
+container.appendChild(input);
+
+
+const editButton = document.createElement("button");
+editButton.textContent = "Edit";
+editButton.className = "mt-2 bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600";
+container.appendChild(editButton);
+
+
+editButton.addEventListener("click", () => {
+  input.readOnly = false;
+  input.focus();
+});
+*/
 
