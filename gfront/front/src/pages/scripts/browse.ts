@@ -15,3 +15,4 @@ function renderBrowseContent()
 }
 
 // https://www.w3schools.com/howto/howto_css_searchbar.asp
+// https://flowbite.com/docs/forms/input-field/

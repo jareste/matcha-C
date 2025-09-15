@@ -128,7 +128,7 @@ function renderTestEdit(profile:Profile)
 	// Need to specify max bio lenght
 	const aboutWrapper = createDiv("mt-4");
 	const aboutTitle = createH3("About me", "font-semibold text-gray-800");
-	const aboutText = createInp("", "text", "bio", "bio", "text-gray-600 text-sm mt-1 leading-relaxed w-full")
+	const aboutText = createInp("", "text", "bio", "bio", "text-gray-600 text-sm mt-1 leading-relaxed w-full max-w-xs max-h-xs") // i just created a createtextarea
 	aboutText.value = `${profile.bio}` || "Explain others about yourself";
 	aboutText.readOnly = true;
 	

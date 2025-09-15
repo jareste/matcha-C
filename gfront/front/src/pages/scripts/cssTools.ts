@@ -28,6 +28,14 @@ export function createInp(placeholder:string, type:string, name:string, id:strin
 	return input;
 }
 
+export function createTextArea(id:string, css:string)
+{
+	const input: HTMLInputElement = document.createElement('input');
+	input.className = css;
+	input.id = id;
+	return input;
+}
+
 export function createSpan(text:string, id:string, css:string)
 {
 	const span: HTMLSpanElement = document.createElement('span');
