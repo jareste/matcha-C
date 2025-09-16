@@ -38,11 +38,7 @@ const testprofile: Profile =
 
 	const form = document.getElementById("edit-form") as HTMLFormElement;
 	if (form) {
-	  form.addEventListener("submit", (e) => {
-		e.preventDefault();
-		const data = Object.fromEntries(new FormData(form));
-		console.log("Edit attempt:", data);
-	  });
+	  console.log("ok");
 	}
   }
 });
@@ -188,7 +184,11 @@ function renderTestEdit(profile:Profile)
 		// 	inp.style.width = Math.min(inp.scrollWidth + 8, 200) + "px";
 		// });
 	});
-
+	form.addEventListener("submit", (e) => {
+		e.preventDefault();
+		const data = Object.fromEntries(new FormData(form));
+		console.log("Edit attempt:", data);
+	  });
 	form.appendChild(card);
 	return form;
 }
