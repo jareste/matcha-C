@@ -1,6 +1,7 @@
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createForm, createH2, createH3, createImage, createInp, createLab, createListItem, createMain, createP, createSelect, createSpan, createUl, truncateText } from "./cssTools";
+import { createBut, createDiv, createForm, createH2, createH3, createImage, createInp, createLab, createListItem, createMain, createP, createSelect, createSpan, createTextArea, createUl, truncateText } from "./cssTools";
 import type { Profile } from "./profile";
+import { renderProfileSetup } from "./profileSetup";
 
 initPage("edit", () => {
   const editContainer = document.getElementById("edit-profile-container");
@@ -54,13 +55,14 @@ const testprofile: Profile =
 function renderTestEdit(profile:Profile)
 {
 	// create the form :)
+	const form = createForm("edit-profile", "");
 	const card = createDiv("container mx-auto rounded-2xl overflow-hidden shadow-lg bg-white border");
-
 
 	// Need to investigate how to build the drag n drop feature properly for this field and that it shows properly.
 	const imgWrapper = createDiv("overflow-hidden");
-	const img = createImage(`${profile.profpic}`,`${profile.first_name} ${profile.last_name}`,"w-full h-full object-cover object-center");
-	imgWrapper.appendChild(img);
+	const drag_drop = renderProfileSetup();
+	//createImage(`${profile.profpic}`,`${profile.first_name} ${profile.last_name}`,"w-full h-full object-cover object-center");
+	imgWrapper.appendChild(drag_drop);
 
 
 	const info = createDiv("p-4");
@@ -128,10 +130,11 @@ function renderTestEdit(profile:Profile)
 	// Need to specify max bio lenght
 	const aboutWrapper = createDiv("mt-4");
 	const aboutTitle = createH3("About me", "font-semibold text-gray-800");
-	const aboutText = createInp("", "text", "bio", "bio", "text-gray-600 text-sm mt-1 leading-relaxed w-full max-w-xs max-h-xs") // i just created a createtextarea
-	aboutText.value = `${profile.bio}` || "Explain others about yourself";
+	const aboutText = createTextArea("bio", "bio", "text-gray-600 text-sm mt-1 leading-relaxed w-full max-h-xs resize-none")
 	aboutText.readOnly = true;
-	
+	aboutText.rows = 4;
+	aboutText.maxLength = 512;
+	aboutText.value = `${profile.bio}` || "Tell othes about yourself";
 	aboutWrapper.appendChild(aboutTitle);
 	aboutWrapper.appendChild(aboutText);
 
@@ -151,7 +154,8 @@ function renderTestEdit(profile:Profile)
 	tagsWrapper.appendChild(tagsTitle);
 	tagsWrapper.appendChild(tagsContainer);
 
-	// const buttonsWrapper = createDiv("mt-4 mb-4 flex justify-evenly");
+	const buttonsWrapper = createDiv("mt-4 mb-4 flex justify-evenly");
+	const save = createBut("Save changes", "save-profile", "px-3 py-1 border bg-gray-100 rounded-full text-sm");
 	// const like = createBut("♥", "like", "text-green-500 text-4xl");
 	// const dislike = createBut("✖", "dislike", "text-red-500 text-4xl");
 	
@@ -162,12 +166,12 @@ function renderTestEdit(profile:Profile)
 	info.appendChild(aboutWrapper);
 	info.appendChild(tagsWrapper);
 
-	// buttonsWrapper.appendChild(dislike);
+	buttonsWrapper.appendChild(save);
 	// buttonsWrapper.appendChild(like);
 
 	card.appendChild(imgWrapper);
 	card.appendChild(info);
-	// card.appendChild(buttonsWrapper);
+	card.appendChild(buttonsWrapper);
 
 	[name, last_name, age, aboutText].forEach(inp => {
 		inp.addEventListener("click", () => {
@@ -184,7 +188,9 @@ function renderTestEdit(profile:Profile)
 		// 	inp.style.width = Math.min(inp.scrollWidth + 8, 200) + "px";
 		// });
 	});
-	return card;
+
+	form.appendChild(card);
+	return form;
 }
 
 

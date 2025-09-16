@@ -28,11 +28,12 @@ export function createInp(placeholder:string, type:string, name:string, id:strin
 	return input;
 }
 
-export function createTextArea(id:string, css:string)
+export function createTextArea(id:string, name:string, css:string)
 {
-	const input: HTMLInputElement = document.createElement('input');
+	const input: HTMLTextAreaElement = document.createElement('textarea');
 	input.className = css;
 	input.id = id;
+	input.name = name;
 	return input;
 }
 

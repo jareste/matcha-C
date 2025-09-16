@@ -14,7 +14,7 @@ initPage("profile-setup", () => {
 
 
 // Investigating drag & drop features. //https://www.youtube.com/watch?v=gjiu9kB7fQc //https://stackabuse.com/drag-and-drop-in-vanilla-javascript/ 
-function renderProfileSetup(): HTMLDivElement {
+export function renderProfileSetup(): HTMLDivElement {
 	let draggedIndex: number | null = null;
   const main = createDiv("");
 
@@ -150,7 +150,7 @@ wrapper.addEventListener("drop", (e) => {
   upload_group.appendChild(drop_zone);
   drop_zone.appendChild(drop_text);
   drop_zone.appendChild(drop_inp);
-  main.appendChild(preview);
+  drop_zone.appendChild(preview);
 
   return main;
 }
