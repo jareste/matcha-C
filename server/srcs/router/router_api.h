@@ -2,6 +2,7 @@
 #define ROUTER_API_H
 
 #include "../../third_party/uthash-master/src/uthash.h"
+#include <stdbool.h>
 
 typedef struct
 {
@@ -9,6 +10,8 @@ typedef struct
     char* route;
     char* headers;
     char* body;
+    size_t body_len;
+    bool is_binary;
 } http_request_t;
 
 typedef struct 
@@ -17,6 +20,7 @@ typedef struct
     const char* request;
     size_t request_len;
     http_request_t parsed_request;
+    char* query;
     int uid;
     char* username;
     char* email;
@@ -39,6 +43,7 @@ typedef enum
     FLAG_NONE = 0x00,
     AUTH_REQUIRED = 0x01,
     LOCAL_REQUEST = 0x02,
+    QUERY_NEEDED = 0x04
 } http_request_flags_t;
 
 typedef struct route_entry

@@ -1,4 +1,5 @@
 #include "db_table_message.h"
+#include "../../../inc/ft_malloc.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -157,6 +158,41 @@ message_t_array *db_tmessage_select_by_recipient(DB_ID DB, int recipient_id)
     return arr;
 }
 
+message_t_array* db_tmessage_select_by_sender_and_recipient(DB_ID DB, int sender_id, int recipient_id)
+{
+    PGresult* res;
+    message_t_array* arr;
+    message_t** ms;
+    int n;
+    int i;
+    char sbuf[16];
+    char rbuf[16];
+
+    snprintf(sbuf, sizeof(sbuf), "%d", sender_id);
+    snprintf(rbuf, sizeof(rbuf), "%d", recipient_id);
+    const char *params[2] = { sbuf, rbuf };
+
+    const char *sql =
+      "SELECT id,sender_id,recipient_id,content,sent_at,is_read "
+      "FROM messages "
+      "WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1) "
+      "ORDER BY sent_at DESC;";
+
+    res = db_query(DB, sql, 2, params);
+    if (!res) return NULL;
+    n = PQntuples(res);
+    arr = malloc(sizeof(*arr));
+    ms = malloc(n * sizeof(message_t*));
+    arr->messages  = ms;
+    arr->count     = n;
+    arr->pg_result = res;
+    for (i = 0; i < n; i++)
+    {
+        ms[i] = make_message_from_row(res, i);
+    }
+    return arr;
+}
+
 int db_tmessage_update_read_status(DB_ID DB, int message_id, bool is_read)
 {
     char idbuf[16], readbuf[8];
@@ -183,6 +219,27 @@ int db_tmessage_delete_by_pk(DB_ID DB, int id)
     snprintf(ibuf, sizeof(ibuf), "%d", id);
     rc = db_gen_delete_by_pk(DB, &m_messages_schema, ibuf);
     return rc;
+}
+
+void db_tmessage_print(message_t *m)
+{
+    if (!m) return;
+    printf("Message ID: %d\n", m->id);
+    printf("  Sender ID: %d\n", m->sender_id);
+    printf("  Recipient ID: %d\n", m->recipient_id);
+    printf("  Content: %s\n", m->content);
+    printf("  Sent At: %s", ctime(&m->sent_at));
+    printf("  Is Read: %s\n", m->is_read ? "true" : "false");
+}
+
+void db_tmessage_print_array(message_t_array *arr)
+{
+    if (!arr) return;
+    printf("Total messages: %zu\n", arr->count);
+    for (size_t i = 0; i < arr->count; i++)
+    {
+        db_tmessage_print(arr->messages[i]);
+    }
 }
 
 int db_tmessage_free_array(message_t_array *arr)

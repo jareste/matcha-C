@@ -7,6 +7,7 @@ from getpass import getpass
 import requests
 import socketio
 import websockets
+import time
 
 # Constants
 BASE_URL = "http://localhost:8080"
@@ -32,6 +33,40 @@ def get_session() -> requests.Session:
 
 # REST functions
 
+def do_upload_picture(session):
+    print("-- Upload Picture --")
+    file_path = input("Path to picture: ").strip()
+    if not os.path.exists(file_path):
+        print("File does not exist.")
+        return
+
+    try:
+        with open(file_path, "rb") as f:
+            files = {"file": (os.path.basename(file_path), f, "image/jpeg")}
+            resp = session.post(f"{BASE_URL}/api/pics/insert", files=files)
+            print("Sent headers:", resp.request.headers)
+            print(resp.status_code, resp.text)
+    except Exception as e:
+        print(f"Upload failed: {e}")
+
+
+def do_get_picture(session):
+    print("-- Get Picture --")
+    pic_id = input("Picture ID: ").strip()
+    if not pic_id.isdigit():
+        print("Invalid picture ID.")
+        return
+
+    resp = session.get(f"{BASE_URL}/api/pics/get/?id={pic_id}")
+    if resp.status_code == 200:
+        filename = f"downloaded_{pic_id}.jpg"
+        with open(filename, "wb") as f:
+            f.write(resp.content)
+        print(f"Picture saved as {filename}")
+    else:
+        print(resp.status_code, resp.text)
+
+
 def do_register(session):
     print("-- Register new user --")
     username = input("Username: ").strip()
@@ -44,6 +79,38 @@ def do_register(session):
     resp = session.post(f"{BASE_URL}/api/register", json=payload)
     print(resp.status_code, resp.text)
 
+
+def do_get_chat_messages(session):
+    print("-- Get Chat Messages --")
+    chat_id = input("Chat ID: ").strip()
+    resp = session.get(f"{BASE_URL}/api/chat/messages/?id={chat_id}")
+    print(resp.status_code, resp.text)
+
+def do_get_insert_tags(session):
+    print("-- Insert Tags --")
+    tags = input("Tags (comma-separated): ").strip()
+
+    try:
+        tags_list = [int(tag.strip()) for tag in tags.split(",") if tag.strip().isdigit()]
+    except ValueError:
+        print("Invalid input. Please enter only numeric tags.")
+        return
+
+    resp = session.post(f"{BASE_URL}/api/tags/insert", json={"tags": tags_list})
+    print(resp.status_code, resp.text)
+
+def do_get_user_profile(session):
+    print("-- Get User Profile --")
+    user_id = input("User ID: ").strip()
+    start_time = time.time()  # Record the start time
+    if user_id.isdigit() and int(user_id) > 0:
+        resp = session.get(f"{BASE_URL}/api/profile/get/?id={user_id}")
+    else:
+        resp = session.get(f"{BASE_URL}/api/profile/get")
+    end_time = time.time()  # Record the end time
+    elapsed_time = end_time - start_time  # Calculate the elapsed time
+    print(f"Response time: {elapsed_time:.2f} seconds")  # Print the response time
+    print(resp.status_code, resp.text)
 
 def do_login(session):
     print("-- Login --")
@@ -172,6 +239,11 @@ def print_menu():
     print("4) Logout (/api/logout)")
     print("5) Connect WebSocket (/ws)")
     print("6) Connect Socket.IO (/socket.io)")
+    print("7) Get Chat Messages (/api/chat/messages/?id=<chat_id>)")
+    print("8) Get User Profile (/api/profile/get/?id=<user_id>)")
+    print("9) Insert Tags (/api/tags/insert)")
+    print("10) Upload Picture (/api/pics/insert)")
+    print("11) Get Picture (/api/pics/get/?id=<pic_id>)")
     print("0) Exit")
 
 
@@ -184,6 +256,11 @@ def main():
         "4": lambda: do_logout(session),
         "5": ws_mode,
         "6": sio_mode,
+        "7": lambda: do_get_chat_messages(session),
+        "8": lambda: do_get_user_profile(session),
+        "9": lambda: do_get_insert_tags(session),
+        "10": lambda: do_upload_picture(session),
+        "11": lambda: do_get_picture(session),
     }
     while True:
         print_menu()

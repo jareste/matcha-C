@@ -41,5 +41,6 @@ int db_tuser_free_array(user_t_array* users);
 int db_tuser_delete_user_from_pk(DB_ID DB, const char* name);
 int db_tuser_update_user(DB_ID DB, const user_t *u);
 void db_tuser_free_user(user_t* user);
+int db_select_user_by_id(DB_ID DB, int id, user_t** user);
 
 #endif /* DB_TABLE_USER_H */

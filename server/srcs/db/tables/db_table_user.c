@@ -147,6 +147,11 @@ static void m_fill_user_with_PGresult_row(user_t* user, PGresult* res, int row, 
         free(user->last_online);
         user->last_online = NULL;
     }
+    if (EMPTY_STRING(user->token))
+    {
+        free(user->token);
+        user->token = NULL;
+    }
 }
 
 user_t_array* db_tuser_select_all_users(DB_ID DB)
@@ -239,6 +244,31 @@ int db_select_user_by_email(DB_ID DB, const char* email, user_t** user)
     PGresult* r2;
     const char *sql = "SELECT * FROM users WHERE email = $1;";
     const char *params[1] = { email };
+
+    r2 = db_query(DB, sql, 1, params);
+    if (r2 && PQntuples(r2) == 1)
+    {
+        *user = calloc(sizeof(user_t), 1);
+        m_fill_user_with_PGresult_row(*user, r2, 0, true);
+    }
+    else
+    {
+        *user = NULL;
+        return ERROR;
+    }
+
+    if (r2) db_clear_result(r2);
+    return SUCCESS;
+}
+
+int db_select_user_by_id(DB_ID DB, int id, user_t** user)
+{
+    char id_buf[16];
+    PGresult* r2;
+    const char *sql = "SELECT * FROM users WHERE id = $1;";
+    
+    snprintf(id_buf, sizeof(id_buf), "%d", id);
+    const char *params[1] = { id_buf };
 
     r2 = db_query(DB, sql, 1, params);
     if (r2 && PQntuples(r2) == 1)

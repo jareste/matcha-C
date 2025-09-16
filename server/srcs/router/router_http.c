@@ -77,7 +77,8 @@ char* get_header_value(const char *req, const char *key)
     while (*p==' '||*p=='\t') p++;
 
     end = strstr(p, "\r\n");
-    if (!end) return NULL;
+    if (!end)
+        end = p + strlen(p); /* Review it. before it was simply returning NULL. */
 
     len = end - p;
     out = malloc(len+1);
@@ -170,8 +171,11 @@ int router_parse_http_request(const char* request, size_t request_len, http_requ
     const char* space2;
     const char* headers_end;
     const char* body_start;
+    char* content_type;
+    char *tmp;
     size_t headers_len;
     size_t line_len;
+    size_t body_len;
 
     if (!request || (request_len == 0) || !out_request)
         return ERROR;
@@ -203,11 +207,56 @@ int router_parse_http_request(const char* request, size_t request_len, http_requ
     headers_len = headers_end - (first_line_end + 2);
     out_request->headers = strndup(first_line_end + 2, headers_len);
 
+    content_type = get_header_value(out_request->headers, "Content-Type");
+    if (content_type)
+    {
+        log_msg(LOG_LEVEL_DEBUG, "Content-Type: %s\n", content_type);
+
+        if (strstr(content_type, "application/json"))
+        {
+            log_msg(LOG_LEVEL_DEBUG, "Detected JSON content\n");
+            out_request->is_binary = false;
+        }
+        else if (strstr(content_type, "multipart/form-data") || strstr(content_type, "application/octet-stream"))
+        {
+            log_msg(LOG_LEVEL_DEBUG, "Detected binary content\n");
+            out_request->is_binary = true;
+        }
+        else
+        {
+            log_msg(LOG_LEVEL_WARN, "Unknown Content-Type: %s\n", content_type);
+            out_request->is_binary = false;
+        }
+
+        free(content_type);
+    }
+    else
+    {
+        log_msg(LOG_LEVEL_WARN, "No Content-Type header found\n");
+        out_request->is_binary = false;
+    }
+
     body_start = headers_end + 4;
     if ((size_t)(body_start - request) < request_len)
-        out_request->body = strndup(body_start, request + request_len - body_start);
+    {
+        body_len = request_len - (body_start - request);
+        out_request->body = malloc(body_len);
+
+        memcpy(out_request->body, body_start, body_len);
+        out_request->body_len = body_len;
+
+        if (!out_request->is_binary)
+        {
+            tmp = realloc(out_request->body, body_len + 1);
+            out_request->body = tmp;
+            out_request->body[body_len] = '\0';
+        }
+    }
     else
+    {
         out_request->body = NULL;
+        out_request->body_len = 0;
+    }
 
     return SUCCESS;
 }
@@ -253,12 +302,15 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     char first_line[256] = {0};
     char* space_pos = NULL;
     char* route_end = NULL;
+    char* route_query = NULL;
     size_t first_line_len = 0;
     route_entry_t* route_entry = NULL;
     http_request_ctx_t request_ctx;
     char* origin;
     char* method = NULL;
     int rc;
+    size_t len;
+
 
     first_line_end = strstr(request, "\r\n");
     if (first_line_end)
@@ -276,6 +328,18 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
             route_end = strchr(route, ' ');
             if (route_end)
                 *route_end = '\0';
+
+            route_query = strchr(route, '?');
+            if (route_query)
+            {
+                *route_query = '\0';
+                route_query++;
+            }
+
+            len = strlen(route);
+            route_end = (char*)(route + len - 1);
+            if (len > 1 && *route_end == '/')
+                *route_end = '\0';
         }
     }
 
@@ -284,10 +348,19 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
 
     route_entry = router_http_find(route);
     if (!route_entry)
+    {
+        log_msg(LOG_LEVEL_ERROR, "No route found for path: %s\n", route);
         return router_http_generate_response(fd, CODE_404_NOT_FOUND, "{\"error\": \"Not Found\"}", NULL);
+    }
 
     if (!route_entry->handler)
         return router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}", NULL);
+
+    if ((route_entry->flags & QUERY_NEEDED) && !route_query)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Route %s requires query parameters but none found\n", route);
+        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request - Missing Query Parameters\"}", NULL);
+    }
 
     origin = get_header_value(request, "Origin");
     if (!origin) origin = strdup("http://localhost:8000"); /* error instead ? */
@@ -310,6 +383,7 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     request_ctx.fd = fd;
     request_ctx.request = request;
     request_ctx.request_len = request_len;
+    request_ctx.query = route_query;
 
     if (route_entry->flags & AUTH_REQUIRED)
     {
@@ -326,7 +400,14 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     }
 
     /* Populate request ctx */
-    router_parse_http_request(request, request_len, &request_ctx.parsed_request);
+    if (router_parse_http_request(request, request_len, &request_ctx.parsed_request) != SUCCESS)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to parse HTTP request\n");
+        log_msg(LOG_LEVEL_DEBUG, "Request was:\n%s\n", request);
+        if (request_ctx.username) free(request_ctx.username);
+        if (request_ctx.email) free(request_ctx.email);
+        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}", NULL);
+    }
 
     /* call the handler */
     route_entry->handler(&request_ctx, route_entry->user_data);

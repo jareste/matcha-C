@@ -6,6 +6,8 @@
 #include "../../inc/error_codes.h"
 #include "../../inc/ft_malloc.h"
 
+#include "tables/db_table_tag.h"
+
 static inline DB_ID m_PGconn_ptr_to_id(PGconn  *db)
 {
     return (DB_ID)(uintptr_t)db;
@@ -135,6 +137,9 @@ int db_init(DB_ID* DB, char* host, char* port,\
     *DB = db_connect(conninfo);
     if (*DB == INVALID_DB_ID)
         return ERROR;
+
+    /* Initialize default tags */
+    db_ttag_insert_default_tags(*DB);
 
     return SUCCESS;
 }

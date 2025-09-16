@@ -225,6 +225,43 @@ user_tag_array *db_ttag_select_tags_for_user(DB_ID DB, int user_id)
     return arr;
 }
 
+tag_t_array* db_ttag_select_tag_objects_for_user(DB_ID DB, int user_id)
+{
+    char ubuf[16];
+    snprintf(ubuf, sizeof(ubuf), "%d", user_id);
+
+    const char *params[1] = { ubuf };
+
+    const char *sql =
+      "SELECT t.id, t.name "
+      "FROM tags t "
+      "JOIN user_tags ut ON t.id = ut.tag_id "
+      "WHERE ut.user_id = $1;";
+
+    PGresult *res = db_query(DB, sql, 1, params);
+    if (!res) return NULL;
+
+    int n = PQntuples(res);
+    if (n <= 0) {
+        PQclear(res);
+        return NULL;
+    }
+
+    tag_t_array *arr = malloc(sizeof(*arr));
+    arr->tags      = malloc(n * sizeof(tag_t*));
+    arr->count     = n;
+    arr->pg_result = res;
+
+    for (int i = 0; i < n; i++) {
+        tag_t *tag   = calloc(1, sizeof(tag_t));
+        tag->id      = atoi(PQgetvalue(res, i, 0));
+        tag->name    = strdup(PQgetvalue(res, i, 1));
+        arr->tags[i] = tag;
+    }
+
+    return arr;
+}
+
 int db_ttag_delete_user_tag(DB_ID DB, int user_id, int tag_id)
 {
     const char *sql =
@@ -251,4 +288,20 @@ int db_ttag_free_map_array(user_tag_array *arr)
     PQclear(arr->pg_result);
     free(arr);
     return SUCCESS;
+}
+
+void db_ttag_insert_default_tags(DB_ID DB)
+{
+    const char* default_tags[] = {
+        "Music", "Movies", "Sports", "Travel", "Food", "Art", "Technology",
+        "Gaming", "Fitness", "Books", "Photography", "Dancing", "Cooking",
+        "Hiking", "Fashion", "Writing", "Yoga", "Meditation", "Crafts",
+        "Volunteering", "Gardening"
+    };
+    size_t n_tags = sizeof(default_tags) / sizeof(default_tags[0]);
+
+    for (size_t i = 0; i < n_tags; i++)
+    {
+        db_ttag_insert_tag(DB, default_tags[i]);
+    }
 }

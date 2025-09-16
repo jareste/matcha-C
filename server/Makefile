@@ -60,6 +60,8 @@ OPENSSL_INSTALL_DIR := third_party/openssl_install
 OPENSSL_BUILD_DIR := third_party/openssl_build
 OPENSSL_BUILD_DONE := $(OPENSSL_INSTALL_DIR)/lib/libssl.a
 
+MULTIPARSER_DIR := $(THIRD_PARTY_PATH)/multipart-parser-c
+MULTIPARSER_OBJ := $(MULTIPARSER_DIR)/multipart_parser.o
 
 #########
 $(OBJ_DIR)/%.o: %.c
@@ -69,10 +71,11 @@ $(OBJ_DIR)/%.o: %.c
 
 all: .gitignore create_cert build_libs build_cjson
 	@echo "\033[1;32mBuilding $(NAME)...\033[0m"
+	@make --silent -C $(MULTIPARSER_DIR)
 	@$(MAKE) $(NAME)
 
 $(NAME): $(OBJ) $(LIB_NAMES)
-	$(CC) $(CFLAGS) $(OBJ) -o $(NAME) $(LDFLAGS) $(LIBFLAGS) $(LIBS)
+	$(CC) $(CFLAGS) $(OBJ) -o $(NAME) $(LDFLAGS) $(LIBFLAGS) $(LIBS) $(MULTIPARSER_OBJ)
 	@echo "EVERYTHING DONE  "
 #	@./.add_path.sh
 
@@ -109,6 +112,7 @@ fclean: clean
 	@make --silent -C srcs/mail fclean
 	@make --silent -C srcs/db fclean
 	@make --silent -C srcs/api fclean
+	@make --silent -C $(MULTIPARSER_DIR) clean
 	@$(RM) $(NAME)
 	@cd $(OPENSSL_SRC_DIR) 2>/dev/null && [ -f Makefile ] && make clean || true
 	@rm -rf $(OPENSSL_INSTALL_DIR)
@@ -129,6 +133,7 @@ re: fclean all
 		echo ".gitignore" >> .gitignore; \
 		echo "log.txt" >> .gitignore; \
 		echo "*.o" >> .gitignore; \
+		echo "cookies.pkl" >> .gitignore; \
 		echo ".gitignore created and updated with entries."; \
 	else \
 		echo ".gitignore already exists."; \

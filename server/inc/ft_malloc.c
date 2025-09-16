@@ -33,3 +33,18 @@ char *ft_strdup(const char *s)
     new_s[len] = '\0';
     return new_s;
 }
+
+void *ft_memmem(const void *haystack, size_t haystacklen,
+                const void *needle, size_t needlelen)
+{
+    if (!haystack || !needle || haystacklen < needlelen)
+        return NULL;
+
+    for (size_t i = 0; i <= haystacklen - needlelen; i++)
+    {
+        if (memcmp((char *)haystack + i, needle, needlelen) == 0)
+            return (char *)haystack + i;
+    }
+
+    return NULL;
+}
