@@ -12,147 +12,149 @@ initPage("profile-setup", () => {
 });
 
 
+// Carousel https://stackabuse.com/how-to-create-a-draggable-carousel-using-vanilla-javascript/
+// https://developer.mozilla.org/en-US/docs/Web/API/Touch_events/Using_Touch_Events phone integration
 
 // Investigating drag & drop features. //https://www.youtube.com/watch?v=gjiu9kB7fQc //https://stackabuse.com/drag-and-drop-in-vanilla-javascript/ 
 export function renderProfileSetup(): HTMLDivElement {
 	let draggedIndex: number | null = null;
-  const main = createDiv("");
+	const main = createDiv("");
 
-  const upload_group = createDiv("");
-  const drop_zone = createDiv("drop-zone");
-  const drop_text = createP("Drag & Drop images here or click to upload", "");
+	const upload_group = createDiv("");
+	const drop_zone = createDiv("drop-zone");
+	const drop_text = createP("Drag & Drop images here or click to upload", "");
 
-  const drop_inp = createInp("", "file", "file-input", "file-input", "");
-  drop_inp.accept = "image/*";
-  drop_inp.multiple = true;
-  drop_inp.style.display = "none"; // hide visually
+	const drop_inp = createInp("", "file", "file-input", "file-input", "");
+	drop_inp.accept = "image/*";
+	drop_inp.multiple = true;
+	drop_inp.style.display = "none"; // hide visually
 
-  const preview = createDiv("preview");
-  preview.id = "preview";
+	const preview = createDiv("preview");
+	preview.id = "preview";
 
-  // Track selected images
-  let images: File[] = [];
+	// Track selected images
+	let images: File[] = [];
 
-  // --- File Handling ---
-  function handleFiles(files: FileList) {
-    const validFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
-    images.push(...validFiles);
-    renderPreviews();
-  }
+	// --- File Handling ---
+	function handleFiles(files: FileList) {
+	const validFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
+	images.push(...validFiles);
+	renderPreviews();
+	}
 
-  function renderPreviews() {
-    preview.innerHTML = ""; // clear previous previews
+	function renderPreviews() {
+	preview.innerHTML = ""; // clear previous previews
 
-    images.forEach((file, index) => {
-      const reader = new FileReader();
+	images.forEach((file, index) => {
+		const reader = new FileReader();
 
-      reader.onload = (e) => {
-        const wrapper = document.createElement("div");
+		reader.onload = (e) => {
+		const wrapper = document.createElement("div");
 		wrapper.draggable = true;
 		wrapper.dataset.index = index.toString();
-        wrapper.style.position = "relative";
-        wrapper.style.display = "inline-block";
-        wrapper.style.margin = "5px";
+		wrapper.style.position = "relative";
+		wrapper.style.display = "inline-block";
+		wrapper.style.margin = "5px";
 		wrapper.classList.add("cursor-move");
 
 		wrapper.addEventListener("dragstart", () => {
-  draggedIndex = index;
-  wrapper.classList.add("opacity-50"); // visual feedback
+	draggedIndex = index;
+	wrapper.classList.add("opacity-50"); // visual feedback
 });
 
 wrapper.addEventListener("dragend", () => {
-  wrapper.classList.remove("opacity-50");
-  draggedIndex = null;
+	wrapper.classList.remove("opacity-50");
+	draggedIndex = null;
 });
 
 wrapper.addEventListener("dragover", (e) => {
-  e.preventDefault(); // allow drop
+	e.preventDefault(); // allow drop
 });
 
 wrapper.addEventListener("drop", (e) => {
-  e.preventDefault();
-  if (draggedIndex === null) return;
+	e.preventDefault();
+	if (draggedIndex === null) return;
 
-  const targetIndex = index;
+	const targetIndex = index;
 
-  // Swap the files in the array
-  const temp = images[draggedIndex];
-  images[draggedIndex] = images[targetIndex];
-  images[targetIndex] = temp;
+	// Swap the files in the array
+	const temp = images[draggedIndex];
+	images[draggedIndex] = images[targetIndex];
+	images[targetIndex] = temp;
 
-  renderPreviews(); // re-render previews in new order
+	renderPreviews(); // re-render previews in new order
 });
 
-        const img = document.createElement("img");
-        img.src = e.target?.result as string;
-        img.style.maxWidth = "120px";
-        img.style.maxHeight = "120px";
-        img.style.borderRadius = "4px";
-        img.style.display = "block";
+		const img = document.createElement("img");
+		img.src = e.target?.result as string;
+		img.style.maxWidth = "120px";
+		img.style.maxHeight = "120px";
+		img.style.borderRadius = "4px";
+		img.style.display = "block";
 
-        const removeBtn = document.createElement("button");
-        removeBtn.innerText = "✖";
-        removeBtn.style.position = "absolute";
-        removeBtn.style.top = "2px";
-        removeBtn.style.right = "2px";
-        removeBtn.style.background = "rgba(0,0,0,0.6)";
-        removeBtn.style.color = "white";
-        removeBtn.style.border = "none";
-        removeBtn.style.borderRadius = "50%";
-        removeBtn.style.cursor = "pointer";
-        removeBtn.style.width = "24px";
-        removeBtn.style.height = "24px";
+		const removeBtn = document.createElement("button");
+		removeBtn.innerText = "✖";
+		removeBtn.style.position = "absolute";
+		removeBtn.style.top = "2px";
+		removeBtn.style.right = "2px";
+		removeBtn.style.background = "rgba(0,0,0,0.6)";
+		removeBtn.style.color = "white";
+		removeBtn.style.border = "none";
+		removeBtn.style.borderRadius = "50%";
+		removeBtn.style.cursor = "pointer";
+		removeBtn.style.width = "24px";
+		removeBtn.style.height = "24px";
 
-        removeBtn.addEventListener("click", () => {
-          images.splice(index, 1); // remove from array
-          renderPreviews();        // re-render
-        });
+		removeBtn.addEventListener("click", () => {
+			images.splice(index, 1); // remove from array
+			renderPreviews();				// re-render
+		});
 
-        wrapper.appendChild(img);
-        wrapper.appendChild(removeBtn);
-        preview.appendChild(wrapper);
-      };
+		wrapper.appendChild(img);
+		wrapper.appendChild(removeBtn);
+		preview.appendChild(wrapper);
+		};
 
-      reader.readAsDataURL(file);
-    });
-  }
+		reader.readAsDataURL(file);
+	});
+	}
 
-  // --- Click to open file picker ---
-  drop_zone.addEventListener("click", () => drop_inp.click());
-  drop_inp.addEventListener("change", () => {
-    if (drop_inp.files) handleFiles(drop_inp.files);
-    drop_inp.value = ""; // allow re-selecting same file later
-  });
+	// --- Click to open file picker ---
+	drop_zone.addEventListener("click", () => drop_inp.click());
+	drop_inp.addEventListener("change", () => {
+	if (drop_inp.files) handleFiles(drop_inp.files);
+	drop_inp.value = ""; // allow re-selecting same file later
+	});
 
-  // --- Drag & Drop ---
-  drop_zone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    drop_zone.classList.add("dragover");
-  });
+	// --- Drag & Drop ---
+	drop_zone.addEventListener("dragover", (e) => {
+	e.preventDefault();
+	e.stopPropagation();
+	drop_zone.classList.add("dragover");
+	});
 
-  drop_zone.addEventListener("dragleave", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    drop_zone.classList.remove("dragover");
-  });
+	drop_zone.addEventListener("dragleave", (e) => {
+	e.preventDefault();
+	e.stopPropagation();
+	drop_zone.classList.remove("dragover");
+	});
 
-  drop_zone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    drop_zone.classList.remove("dragover");
+	drop_zone.addEventListener("drop", (e) => {
+	e.preventDefault();
+	e.stopPropagation();
+	drop_zone.classList.remove("dragover");
 
-    if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files);
-  });
+	if (e.dataTransfer?.files) handleFiles(e.dataTransfer.files);
+	});
 
-  // Build DOM
-  main.appendChild(upload_group);
-  upload_group.appendChild(drop_zone);
-  drop_zone.appendChild(drop_text);
-  drop_zone.appendChild(drop_inp);
-  drop_zone.appendChild(preview);
+	// Build DOM
+	main.appendChild(upload_group);
+	upload_group.appendChild(drop_zone);
+	drop_zone.appendChild(drop_text);
+	drop_zone.appendChild(drop_inp);
+	drop_zone.appendChild(preview);
 
-  return main;
+	return main;
 }
 
 // https://flowbite.com/docs/forms/file-input/
@@ -161,8 +163,8 @@ wrapper.addEventListener("drop", (e) => {
 // {
 // 	// `
 // 	// <div id="drop-zone" class="drop-zone">
-// 	//   <p>Drag & Drop images here or click to upload</p>
-// 	//   <input id="file-input" type="file" accept="image/*" multiple hidden />
+// 	//	 <p>Drag & Drop images here or click to upload</p>
+// 	//	 <input id="file-input" type="file" accept="image/*" multiple hidden />
 // 	// </div>
 // 	// <div id="preview" class="preview"></div>
 // 	// `
@@ -190,25 +192,25 @@ wrapper.addEventListener("drop", (e) => {
 	
 // 	drop_zone.addEventListener("click", () => drop_inp.click());
 // 	drop_zone.addEventListener("dragover", (e) => {
-//   e.preventDefault();
-//   e.stopPropagation();
-//   drop_zone.classList.add("dragover");
+//	 e.preventDefault();
+//	 e.stopPropagation();
+//	 drop_zone.classList.add("dragover");
 // });
 
 // drop_zone.addEventListener("dragleave", (e) => {
-//   e.preventDefault();
-//   e.stopPropagation();
-//   drop_zone.classList.remove("dragover");
+//	 e.preventDefault();
+//	 e.stopPropagation();
+//	 drop_zone.classList.remove("dragover");
 // });
 
 // drop_zone.addEventListener("drop", (e) => {
-//   e.preventDefault();
-//   e.stopPropagation();
-//   drop_zone.classList.remove("dragover");
+//	 e.preventDefault();
+//	 e.stopPropagation();
+//	 drop_zone.classList.remove("dragover");
 
-//   if (e.dataTransfer?.files) {
-//     handleFiles(e.dataTransfer.files, preview);
-//   }
+//	 if (e.dataTransfer?.files) {
+//		 handleFiles(e.dataTransfer.files, preview);
+//	 }
 // });
 
 // 	return main;

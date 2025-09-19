@@ -13,3 +13,7 @@ function renderHomeContent()
 	// work with proper ts builders from cssTools
 	return '';
 }
+
+
+
+// https://developer.mozilla.org/en-US/docs/Web/Progressive_web_apps/Manifest to store as webapp on phone
