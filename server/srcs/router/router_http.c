@@ -213,20 +213,11 @@ int router_parse_http_request(const char* request, size_t request_len, http_requ
         log_msg(LOG_LEVEL_DEBUG, "Content-Type: %s\n", content_type);
 
         if (strstr(content_type, "application/json"))
-        {
-            log_msg(LOG_LEVEL_DEBUG, "Detected JSON content\n");
             out_request->is_binary = false;
-        }
         else if (strstr(content_type, "multipart/form-data") || strstr(content_type, "application/octet-stream"))
-        {
-            log_msg(LOG_LEVEL_DEBUG, "Detected binary content\n");
             out_request->is_binary = true;
-        }
         else
-        {
-            log_msg(LOG_LEVEL_WARN, "Unknown Content-Type: %s\n", content_type);
             out_request->is_binary = false;
-        }
 
         free(content_type);
     }

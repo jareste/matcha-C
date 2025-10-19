@@ -139,7 +139,7 @@ re: fclean all
 		echo ".gitignore already exists."; \
 	fi
 
-.PHONY: all clean fclean re release .gitignore compile_ssl create_cert  db_up db_down db_reset
+.PHONY: all clean fclean re release .gitignore compile_ssl create_cert  db_up db_down db_reset test
 
 create_cert:
 	@if [ ! -f certs/cert.pem ]; then \
@@ -179,5 +179,8 @@ docker_clean:
 	@docker system prune -af || true
 	@docker volume prune -f || true
 	@echo "Docker cleanup complete."
+
+test:
+	@pytest tests/test.py
 
 -include $(DEP)

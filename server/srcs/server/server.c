@@ -11,6 +11,7 @@
 #include <sys/uio.h>
 #include <sys/timerfd.h>
 #include <stdlib.h>
+#include <errno.h>
 #include <openssl/sha.h>
 #include <openssl/bio.h>
 #include <openssl/evp.h>
@@ -504,15 +505,29 @@ static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_
 
             cap += CHUNK;
             tmp = realloc(buf, cap);
-            if (!tmp)
-                return ERROR;
 
             buf = tmp;
         }
 
         n = recv(fd, buf + len, cap - len, 0);
-        if (n <= 0)
+        if (n == 0)
+        {
+            log_msg(LOG_LEVEL_INFO, "Client closed2 connection: fd=%d\n", fd);
             return ERROR;
+        }
+        if (n < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                break;
+            }
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            log_msg(LOG_LEVEL_ERROR, "recv error2 on fd=%d: %s\n", fd, strerror(errno));
+            return ERROR;
+        }
         len += (size_t)n;
 
         headers_end = NULL;
@@ -529,6 +544,28 @@ static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_
     }
 
     header_len = headers_end_off;
+    // content_len_hdr = ft_memmem(buf, header_len, "Content-Length:", 15);
+    // content_len = 0;
+
+    // if (content_len_hdr)
+    // {
+    //     p = content_len_hdr + 15;
+    //     while (p < (buf + header_len) && (*p == ' ' || *p == '\t'))
+    //         p++;
+    //     content_len = (size_t) strtoul(p, NULL, 10);
+    // }
+    // else
+    // {
+    //     log_msg(LOG_LEVEL_ERROR, "Content-Length header not found\n");
+    //     return ERROR;
+    // }
+
+    // need = headers_end_off + content_len;
+    // if (need > max_size)
+    // {
+    //     log_msg(LOG_LEVEL_ERROR, "Request size exceeds maximum limit\n");
+    //     return ERROR;
+    // }
     content_len_hdr = ft_memmem(buf, header_len, "Content-Length:", 15);
     content_len = 0;
 
@@ -541,14 +578,17 @@ static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_
     }
     else
     {
-        return ERROR;
+        // No Content-Length → assume no body
+        log_msg(LOG_LEVEL_DEBUG, "No Content-Length header, treating as body length 0\n");
     }
 
     need = headers_end_off + content_len;
     if (need > max_size)
     {
+        log_msg(LOG_LEVEL_ERROR, "Request size exceeds maximum limit\n");
         return ERROR;
     }
+
 
     while (len < need)
     {
@@ -557,6 +597,7 @@ static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_
             grow = (need - cap) > CHUNK ? CHUNK : (need - cap);
             if (cap > max_size - grow)
             {
+                log_msg(LOG_LEVEL_ERROR, "Request size exceeds maximum limit\n");
                 return ERROR;
             }
             cap += grow;
@@ -564,10 +605,30 @@ static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_
             buf = tmp;
         }
         n = recv(fd, buf + len, cap - len, 0);
-        if (n <= 0)
+        // if (n <= 0)
+        // {
+        //     log_msg(LOG_LEVEL_ERROR, "recv error or connection closed 2 on fd=%d\n", fd);
+        //     return ERROR;
+        // }
+        if (n == 0)
         {
+            log_msg(LOG_LEVEL_INFO, "Client closed connection: fd=%d\n", fd);
             return ERROR;
         }
+        if (n < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+            {
+                break;
+            }
+            if (errno == EINTR)
+            {
+                continue;
+            }
+            log_msg(LOG_LEVEL_ERROR, "recv error on fd=%d: %s\n", fd, strerror(errno));
+            return ERROR;
+        }
+
         len += (size_t)n;
     }
 
@@ -617,7 +678,9 @@ int m_handle_client_event(int fd)
         return SUCCESS;
     }
 
-#ifndef DYNAMIC_RCV
+#ifdef DYNAMIC_RCV
+    buf[buf_len] = '\0';
+#else
     buf[ret] = '\0';
 #endif
 
@@ -652,7 +715,7 @@ int m_handle_client_event(int fd)
             REMOVE_CLIENT(fd);
             return ERROR;
         }
-        REMOVE_CLIENT(fd);
+        // REMOVE_CLIENT(fd);
         return SUCCESS;
     }
 

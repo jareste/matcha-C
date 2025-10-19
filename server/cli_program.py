@@ -49,6 +49,33 @@ def do_upload_picture(session):
     except Exception as e:
         print(f"Upload failed: {e}")
 
+def do_update_profile(session):
+    print("-- Update Profile --")
+    print("Leave fields empty to keep current values:")
+    
+    first_name = input("First name: ").strip()
+    last_name = input("Last name: ").strip()
+    email = input("Email: ").strip()
+    bio = input("Bio: ").strip()
+    
+    # Build payload with only non-empty fields
+    payload = {}
+    if first_name:
+        payload["first_name"] = first_name
+    if last_name:
+        payload["last_name"] = last_name
+    if email:
+        payload["email"] = email
+    if bio:
+        payload["bio"] = bio
+    
+    if not payload:
+        print("No fields to update.")
+        return
+    
+    resp = session.post(f"{BASE_URL}/api/profile/update", json=payload)
+    print(resp.status_code, resp.text)
+
 
 def do_get_picture(session):
     print("-- Get Picture --")
@@ -244,8 +271,8 @@ def print_menu():
     print("9) Insert Tags (/api/tags/insert)")
     print("10) Upload Picture (/api/pics/insert)")
     print("11) Get Picture (/api/pics/get/?id=<pic_id>)")
+    print("12) Update Profile (/api/profile/update)")  # New option
     print("0) Exit")
-
 
 def main():
     session = get_session()
@@ -261,6 +288,7 @@ def main():
         "9": lambda: do_get_insert_tags(session),
         "10": lambda: do_upload_picture(session),
         "11": lambda: do_get_picture(session),
+        "12": lambda: do_update_profile(session),
     }
     while True:
         print_menu()

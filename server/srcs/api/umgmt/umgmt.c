@@ -6,6 +6,7 @@
 #include "../../db/db_gen.h"
 #include "../../db/db_api.h"
 #include "../../db/tables/db_table_user.h"
+#include "../../log/log_api.h"
 #include "token.h"
 #include <stdio.h>
 #include <unistd.h>
@@ -45,10 +46,14 @@ void api_umgmt_register(void* _ctx, void *user_data)
         goto cleanup;
     }
 
+    log_msg(LOG_LEVEL_DEBUG, "#################Body#####################:\n%s\n", request.body);
+    log_msg(LOG_LEVEL_DEBUG, "#########################################\n");
     /* Parse request body for user registration data */
     json = cJSON_Parse(request.body);
     if (!json)
     {
+        log_msg(LOG_LEVEL_ERROR, "Register failed to parse JSON body\n");
+        log_msg(LOG_LEVEL_DEBUG, "Body was:\n%s\n", request.body);
         router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
                                       "{\"error\":\"Invalid JSON\"}", NULL);
         goto cleanup;
@@ -226,9 +231,14 @@ void api_umgmt_login(void* _ctx, void *user_data)
         goto cleanup;
     }
 
+    log_msg(LOG_LEVEL_DEBUG, "#################Body#####################:\n%s\n", ctx->parsed_request.body);
+    log_msg(LOG_LEVEL_DEBUG, "#########################################\n");
+
     json = cJSON_Parse(ctx->parsed_request.body);
     if (!json)
     {
+        log_msg(LOG_LEVEL_ERROR, "Login failed to parse JSON body\n");
+        log_msg(LOG_LEVEL_DEBUG, "Body was:\n%s\n", ctx->parsed_request.body);
         router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
                                       "{\"error\":\"Invalid JSON\"}", NULL);
         goto cleanup;

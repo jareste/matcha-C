@@ -10,51 +10,105 @@
 #include "../../db/tables/db_table_pic.h"
 #include "../../log/log_api.h"
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
 DB_ID get_db_id();
 
+#define EXTRACT_JSON_STRING(json, field_name, target_var) \
+    do { \
+        cJSON* item = cJSON_GetObjectItemCaseSensitive(json, field_name); \
+        target_var = (item && cJSON_IsString(item)) ? item->valuestring : NULL; \
+    } while(0)
+
+#define UPDATE_USER_FIELD(user, field, new_value) \
+    do { \
+        if (new_value) { \
+            if (user->field) free(user->field); \
+            user->field = strdup(new_value); \
+        } \
+    } while(0)
+
 void profile_update_user(void* _ctx, void *user_data)
 {
-    // http_request_ctx_t* ctx = (http_request_ctx_t*)_ctx;
-    // user_t* existing_user = NULL;
-    // int ret;
+    http_request_ctx_t* ctx = (http_request_ctx_t*)_ctx;
+    user_t* existing_user = NULL;
+    int ret;
+    cJSON* json;
+    char* json_str;
+    char* json_token;
 
-    // if (!ctx || !user_data)
-    //     return ERROR;
-
-    // /* Extract user data from the context */
-    // const char* first_name = ctx->first_name;
-    // const char* last_name = ctx->last_name;
-    // const char* email = ctx->email;
-
-    // if (!first_name || !last_name || !email)
-    //     return ERROR;
-
-    // db_select_user_by_id(get_db_id(), uid, &existing_user);
-    // if (!existing_user)
-    // {
-    //     log_msg(LOG_LEVEL_ERROR, "User with ID %d not found\n", uid);
-    //     return ERROR;
-    // }
-
-    // /* Check if the new email is already taken by another user */
-    // db_select_user_by_email(get_db_id(), email, &existing_user);
-    // if (existing_user && existing_user->id != uid)
-    // {
-    //     log_msg(LOG_LEVEL_ERROR, "Email %s is already in use by another user\n", email);
-    //     db_tuser_free_user(existing_user);
-    //     return ERROR;
-    // }
-    // db_tuser_free_user(existing_user);
-
-    // log_msg(LOG_LEVEL_INFO, "Updating user ID %d: first_name=%s, last_name=%s, email=%s\n",
-    //         uid, first_name, last_name, email);
-
-    (void)_ctx;
     (void)user_data;
 
-    return;
+    if (!ctx)
+        return;
+
+    log_msg(LOG_LEVEL_DEBUG, "Profile update request from fd=%d\n", ctx->fd);
+
+    /* Extract user data from the context */
+    json_str = ctx->parsed_request.body;
+    if (!json_str)
+    {
+        log_msg(LOG_LEVEL_ERROR, "No JSON body provided for profile update\n");
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"No data provided\"}", NULL);
+        return;
+    }
+
+    json = cJSON_Parse(json_str);
+    if (!json)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to parse JSON body for profile update\n");
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Invalid JSON\"}", NULL);
+        return;
+    }
+
+    log_msg(LOG_LEVEL_DEBUG, "Parsed JSON for profile update: %s\n", json_str);
+    
+    if (db_select_user_by_id(get_db_id(), ctx->uid, &existing_user) != SUCCESS || !existing_user)
+    {
+        log_msg(LOG_LEVEL_ERROR, "User with ID %d not found for profile update\n", ctx->uid);
+        router_http_generate_response(ctx->fd, CODE_404_NOT_FOUND,
+                                      "{\"error\":\"User not found\"}", NULL);
+        cJSON_Delete(json);
+        return;
+    }
+
+    log_msg(LOG_LEVEL_DEBUG, "Updating profile for user ID %d\n", existing_user->id);
+
+    /* Update user fields if provided */
+    EXTRACT_JSON_STRING(json, "first_name", json_token);
+    UPDATE_USER_FIELD(existing_user, first_name, json_token);
+    
+    EXTRACT_JSON_STRING(json, "last_name", json_token);
+    UPDATE_USER_FIELD(existing_user, last_name, json_token);
+    
+    EXTRACT_JSON_STRING(json, "email", json_token);
+    UPDATE_USER_FIELD(existing_user, email, json_token);
+    
+    EXTRACT_JSON_STRING(json, "bio", json_token);
+    UPDATE_USER_FIELD(existing_user, bio, json_token);
+
+    ret = db_tuser_update_user(get_db_id(), existing_user);
+    if (ret == ERROR)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to update user ID %d in database\n", existing_user->id);
+        router_http_generate_response(ctx->fd, CODE_500_INTERNAL_SERVER_ERROR,
+                                      "{\"error\":\"Failed to update profile\"}", NULL);
+        db_tuser_free_user(existing_user);
+        cJSON_Delete(json);
+        return;
+    }
+
+    log_msg(LOG_LEVEL_DEBUG, "Profile for user ID %d updated successfully\n", existing_user->id);
+
+    router_http_generate_response(ctx->fd, CODE_200_OK,
+                                  "{\"success\":true,\"message\":\"Profile updated successfully\"}", NULL);
+    
+    db_tuser_free_user(existing_user);
+    cJSON_Delete(json);
 }
 
 void profile_get_user(void* _ctx, void *user_data)
