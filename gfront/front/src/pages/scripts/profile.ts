@@ -102,8 +102,6 @@ function renderProfileContent(profile: Profile)
 
 	const buttonsWrapper = createDiv("mt-4 mb-4 flex justify-evenly");
 	
-	// const like = createBut("♥", "like", "text-green-500 text-4xl"); // need to investigate how to use svg
-	// const reject = createBut("✖", "reject", "text-red-500 text-4xl"); // need to investigate how to use svg
 	const likeSVG = 
 	`
 		<svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
