@@ -184,3 +184,23 @@ export function truncateText(text: string, maxLength: number): string
 	}
 	return text.slice(0, maxLength) + "…";
 }
+
+export function createSvgBut(id: string, css: string, svg: string)
+{
+	const button:HTMLButtonElement = document.createElement('button');
+	button.id = id;
+	button.className = css;
+	button.innerHTML = svg;
+	
+	// this should help apply size like text to svg
+	const svgEl = button.querySelector('svg');
+	if (svgEl)
+	{
+		svgEl.setAttribute('fill', 'currentColor');
+		svgEl.setAttribute('width', '1em');
+		svgEl.setAttribute('height', '1em');
+	}
+
+
+	return button;
+}
