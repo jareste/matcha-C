@@ -33,7 +33,7 @@ const testprofile: Profile =
 
 	/////////////
 
-	editContainer.appendChild(renderEditForm(testprofile));
+	//editContainer.appendChild(renderEditForm(testprofile));  //Contains fields for login, email and pass change
 	editContainer.appendChild(renderTestEdit(testprofile));
 
 	const form = document.getElementById("edit-form") as HTMLFormElement;
@@ -45,7 +45,7 @@ const testprofile: Profile =
 
 
 
-// Te idea is that this form will replace user profile when it clicks the edit button instead of having its own page.
+// The idea is that this form will replace user profile when it clicks the edit button instead of having its own page.
 // Need to transform all to input fields with a button on its side to modify each field
 // What will happen if a field is invalid? how sould we act? discard everything? push the changes that are valid only?
 function renderTestEdit(profile:Profile)
@@ -130,7 +130,7 @@ function renderTestEdit(profile:Profile)
 	aboutText.readOnly = true;
 	aboutText.rows = 4;
 	aboutText.maxLength = 512;
-	aboutText.value = `${profile.bio}` || "Tell othes about yourself";
+	aboutText.value = `${profile.bio}` || "Tell others about yourself";
 	aboutWrapper.appendChild(aboutTitle);
 	aboutWrapper.appendChild(aboutText);
 
@@ -163,7 +163,6 @@ function renderTestEdit(profile:Profile)
 	info.appendChild(tagsWrapper);
 
 	buttonsWrapper.appendChild(save);
-	// buttonsWrapper.appendChild(like);
 
 	card.appendChild(imgWrapper);
 	card.appendChild(info);
@@ -195,102 +194,19 @@ function renderTestEdit(profile:Profile)
 
 
 
-//	from this, the idea is to only keep username email and password forms.
+// username email and password change forms.
 function renderEditForm(user:Profile)
 {
 
 	const main = createMain("flex flex-grow items-center justify-center p-2 bg-emerald-100");
 	const main_div = createDiv("w-full max-w-xs");
 
-	
-	//
-	const avatarDiv = createDiv("mx-auto w-32 h-32 relative border-2 box-blue overflow-hidden mt-2");
-	const avatarImg = createImage(user?.profpic || "/vite.svg", "profile picture", "object-cover w-full h-full");
-
 	//
 	const formsContainer = createDiv("px-6 py-4");
 
 	//
-	const imgForm = createForm("edit-img-form", "space-x-2");
-	imgForm.enctype = "multipart/form-data";
-	
-	const fileInput = createInp("","file","image", "image-upload", "hidden");
-	fileInput.type = "file";
-	fileInput.accept = "image/*";
-
-	const label = document.createElement("label");
-	label.htmlFor = "image-upload";
-	label.textContent = "Choose Image";
-	label.className = "cursor-pointer btn-contrast hover-underline-animation px-4 py-2 inline-block";
-
-	//
-	const uploadError_wrapper = createDiv("mb-1 h-4");
-	const uploadError = createSpan("", "upload-error", "text-red-500 text-xs italic hidden mb-4 animate-fade-in");
-
-	const uploadBtn = createBut("Upload", "upload-image", "btn-contrast hover-underline-animation px-4 py-2 mt-4");
-	uploadBtn.setAttribute("type", "submit");
-
-	//
 
 	const userForm = createForm("userForm", "mt-4");
-	//
-
-
-	const genderLabel = createLab(`Current gender: ${user?.gender}`, "gender", " text-blue font-bold mb-2");
-	const genderSelect = createSelect("gender","box-blue text-gray-500 border rounded w-full py-2 px-3 leading-tight focus:outline-none mb-4",
-		[
-			{value: "0", text: ""},
-			{value: "1", text: "Not specified"},
-			{value: "2", text: "Non-binary"},
-			{value: "3", text: "Female"},
-			{value: "4", text: "Male"},
-		]
-	);
-	(genderSelect.querySelector("option[value='0']") as HTMLOptionElement).selected = true;
-
-	//
-
-	const orientLabel = createLab(`Sexual orientation: ${user?.orientation}`, "orient", " text-blue font-bold mb-2");
-	const orientSelect = createSelect("orient","box-blue text-gray-500 border rounded w-full py-2 px-3 leading-tight focus:outline-none mb-4",
-		[
-			{value: "0", text: ""},
-			{value: "1", text: "Not specified"},
-			{value: "2", text: "Bisexual"},
-			{value: "3", text: "Women"},
-			{value: "4", text: "Men"},
-		]
-	);
-	(orientSelect.querySelector("option[value='0']") as HTMLOptionElement).selected = true;
-
-
-	//
-	const ageLabel = createLab(`Current birthday: ${user?.age}`, "age", " text-blue font-bold mb-2");
-	const ageInput = createInp("dd/mm/yyyy", "text", "age", "age", "box-blue text-gray-500 border rounded w-full py-2 px-3 leading-tight focus:outline-none");
-	
-	const age_error_wrapper = createDiv("mb-1 h-4");
-	const age_error = createSpan("", "age-error-check", "text-red-500 text-xs animate-fade-in italic hidden");
-
-	//
-	const tmp_name = truncateText(user?.first_name,13);
-	const name_label = createLab(`Current first name: ${tmp_name}`, "name", "text-blue font-bold mb-2");
-	name_label.title = user.first_name;
-	const name_input = createInp("example name", "text", "name", "name", "box-blue text-gray-500 border rounded w-full py-2 px-3 leading-tight focus:outline-none");
-	
-	
-	const name_error_wrapper = createDiv("mb-1 h-4");
-	const name_error = createSpan("", "name-error-check", "text-red-500 text-xs animate-fade-in italic hidden");
-
-	
-
-	//
-	const tmp_last = truncateText(user?.last_name,13);
-	const lastname_label = createLab(`Current last name: ${tmp_last}`, "lastname", "text-blue font-bold mb-2");
-	lastname_label.title = user?.last_name;
-	const lastname_input = createInp("example last name", "text", "lastname", "lastname", "box-blue text-gray-500 border rounded w-full py-2 px-3 leading-tight focus:outline-none");
-	
-	
-	const lastname_error_wrapper = createDiv("mb-1 h-4");
-	const lastname_error = createSpan("", "lastname-error-check", "text-red-500 text-xs animate-fade-in italic hidden");
 
 	
 	//
@@ -340,48 +256,7 @@ function renderEditForm(user:Profile)
 	//
 	
 	main.appendChild(main_div);
-	main_div.appendChild(avatarDiv);
 	main_div.appendChild(formsContainer);
-	avatarDiv.appendChild(avatarImg);
-	
-	//
-	formsContainer.appendChild(imgForm);
-	imgForm.appendChild(uploadError_wrapper);
-	uploadError_wrapper.appendChild(uploadError);
-	imgForm.appendChild(fileInput);
-	imgForm.appendChild(label);
-	imgForm.appendChild(uploadBtn);
-	
-	//
-	
-	userForm.appendChild(genderLabel);
-	userForm.appendChild(genderSelect);
-	//
-
-	userForm.appendChild(orientLabel);
-	userForm.appendChild(orientSelect);
-
-	//
-	userForm.appendChild(ageLabel);
-	userForm.appendChild(ageInput);
-	userForm.appendChild(age_error_wrapper);
-	userForm.appendChild(age_error);
-
-	//
-	userForm.appendChild(name_label);
-	userForm.appendChild(name_input);
-	userForm.appendChild(name_error_wrapper);
-	name_error_wrapper.appendChild(name_error);
-	
-	
-	//
-	
-	userForm.appendChild(lastname_label);
-	userForm.appendChild(lastname_input);
-	userForm.appendChild(lastname_error_wrapper);
-	lastname_error_wrapper.appendChild(lastname_error);
-	
-	
 	//
 	formsContainer.appendChild(userForm);
 

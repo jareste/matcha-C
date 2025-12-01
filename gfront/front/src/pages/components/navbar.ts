@@ -10,6 +10,7 @@ export function renderNavbar(active: string): string
 			<a href="register" class="${active === "register" ? "text-blue-600" : ""}">Register</a>
 			<a href="edit-profile" class="${active === "edit" ? "text-blue-600" : ""}">Edit</a>
 			<a href="chat-test" class="${active === "chat-test" ? "text-blue-600" : ""}">Chat test</a>
+			<a href="test" class="${active === "test" ? "text-blue-600" : ""}">Test</a>
 		</nav>
 	`;
 }
