@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createForm, createInp, createLab, createListItem, createMain, createSpan, createUl, showError } from "./cssTools";
+import { createBtn, createDiv, createForm, createInp, createLab, createListItem, createMain, createSpan, createUl, showError } from "./cssTools";
 import { checkValidEmail, checkValidPass, checkValidUser } from "./regex";
 
 initPage("register", () => {
@@ -91,7 +91,7 @@ function renderRegisterForm()
 	
 	//
 	const butt_div = createDiv("flex items-center justify-between mt-6 mb-2");
-	const register_button = createBut("Register", "regBtnConfirm", "btn-contrast hover-underline-animation");
+	const register_button = createBtn("Register", "regBtnConfirm", "btn-contrast hover-underline-animation");
 	register_button.setAttribute("type", "submit");
 	
 	//

@@ -16,6 +16,7 @@ initPage("profile-setup", () => {
 // https://developer.mozilla.org/en-US/docs/Web/API/Touch_events/Using_Touch_Events phone integration
 
 // Investigating drag & drop features. //https://www.youtube.com/watch?v=gjiu9kB7fQc //https://stackabuse.com/drag-and-drop-in-vanilla-javascript/ 
+
 export function renderProfileSetup(): HTMLDivElement {
 	let draggedIndex: number | null = null;
 	const main = createDiv("");

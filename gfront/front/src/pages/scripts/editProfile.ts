@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createForm, createH2, createH3, createImage, createInp, createLab, createListItem, createMain, createP, createSelect, createSpan, createTextArea, createUl, truncateText } from "./cssTools";
+import { createBtn, createDiv, createForm, createH2, createH3, createImage, createInp, createLab, createListItem, createMain, createP, createSelect, createSpan, createTextArea, createUl, truncateText } from "./cssTools";
 import type { Profile } from "./profile";
 import { renderProfileSetup } from "./profileSetup";
 
@@ -151,9 +151,9 @@ function renderTestEdit(profile:Profile)
 	tagsWrapper.appendChild(tagsContainer);
 
 	const buttonsWrapper = createDiv("mt-4 mb-4 flex justify-evenly");
-	const save = createBut("Save changes", "save-profile", "px-3 py-1 border bg-gray-100 rounded-full text-sm");
-	// const like = createBut("♥", "like", "text-green-500 text-4xl");
-	// const dislike = createBut("✖", "dislike", "text-red-500 text-4xl");
+	const save = createBtn("Save changes", "save-profile", "px-3 py-1 border bg-gray-100 rounded-full text-sm");
+	// const like = createBtn("♥", "like", "text-green-500 text-4xl");
+	// const dislike = createBtn("✖", "dislike", "text-red-500 text-4xl");
 	
 
 	info.appendChild(header);
@@ -251,7 +251,7 @@ function renderEditForm(user:Profile)
 
 
 
-	const saveChangesBtn = createBut("Save changes", "save-changes-btn", "hover-underline-animation btn-contrast mt-2 w-full");
+	const saveChangesBtn = createBtn("Save changes", "save-changes-btn", "hover-underline-animation btn-contrast mt-2 w-full");
 	saveChangesBtn.setAttribute("type", "submit");
 	//
 	

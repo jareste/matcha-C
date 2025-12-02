@@ -69,7 +69,7 @@ export function createListItem(text:string, css:string)
 	return listItem;
 }
 
-export function createBut(text:string, id:string, css:string)
+export function createBtn(text:string, id:string, css:string)
 {
 	const button:HTMLButtonElement = document.createElement('button');
 	button.textContent = text;

@@ -45,7 +45,7 @@ const testprofile: Profile =
 
 
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createH2, createH3, createImage, createListItem, createP, createSpan, createSvgBut, createUl, truncateText } from "./cssTools";
+import { createBtn, createDiv, createH2, createH3, createImage, createListItem, createP, createSpan, createSvgBut, createUl, truncateText } from "./cssTools";
 
 initPage("profile", () => {
 	const profileContainer = document.getElementById("profile-container");

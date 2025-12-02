@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBut, createDiv, createForm, createInp, createLab, createMain, createSpan, showError } from "./cssTools";
+import { createBtn, createDiv, createForm, createInp, createLab, createMain, createSpan, showError } from "./cssTools";
 
 initPage("login", () => {
 	const loginContainer = document.getElementById("login-container");
@@ -41,7 +41,7 @@ function renderLoginForm()
 	
 	///
 	const butt_div = createDiv("flex items-center justify-between mt-6 mb-2");
-	const login_button = createBut("Log in", "loginBtnConfirm", " btn-contrast hover-underline-animation");
+	const login_button = createBtn("Log in", "loginBtnConfirm", " btn-contrast hover-underline-animation");
 	login_button.setAttribute("type", "submit");
 	
 	///
