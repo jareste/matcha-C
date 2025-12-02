@@ -23,7 +23,7 @@ function carousel_reusable(name: string, img: string[], css_name: string)
     img.forEach(src => 
     {
       const carousel_slide = createDiv(css_name + "-slide");
-      const carousel_img = createImage(src, "img_" + i, css_name + "-img");
+      const carousel_img = createImage(src, "img_" + i, css_name + "-img"); // check if multiple img with same name will colide...
       carousel_slide.appendChild(carousel_img);
       carousel_track.appendChild(carousel_slide);
       i++;
