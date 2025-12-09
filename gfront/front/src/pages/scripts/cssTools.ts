@@ -85,10 +85,11 @@ export function createMain(css:string)
 	return main;
 }
 
-export function createImage(path:string, alt:string, css:string)
+export function createImage(path:string, id:string, alt:string, css:string)
 {
 	const image:HTMLImageElement = document.createElement('img');
 	image.src = path;
+	image.id = id;
 	image.alt = alt;
 	image.className = css;
 	return image;
