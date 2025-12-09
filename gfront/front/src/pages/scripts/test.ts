@@ -14,8 +14,11 @@ initPage("test", () => {
 
 //https://www.w3schools.com/csS/css3_object-fit.asp
 
+
+
 // Basic reusable carousel hehe
-// missing css, dot navigation and responsive
+// missing dot navigation and responsive
+// write the css in each place without depending of .css file
 function carousel_reusable(name: string, img: string[], css_name: string)
 {
     const carousel = createDiv(css_name + "-wrap");
