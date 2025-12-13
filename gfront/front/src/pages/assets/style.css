@@ -152,20 +152,3 @@ xl:
 {
 	right: 0;
 }
-
-.matchcar-prev::after , .matchcar-next::after
-{
-	content: " ";
-	position: absolute;
-	width: 10px;
-	height: 10px;
-	top: 50%;
-	left: 54%;
-	transform: translate(-50%,-50%) rotate(135deg);
-}
-
-.matchcar-next::after
-{
-	left: 47%;
-	transform: translate(-50%, -50%) rotate(-45deg);
-}
