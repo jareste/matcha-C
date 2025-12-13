@@ -61,7 +61,7 @@ function renderProfileContent(profile: Profile)
 	const card = createDiv("container mx-auto rounded-2xl overflow-hidden shadow-lg bg-white border");
 
 	const imgWrapper = createDiv("overflow-hidden");
-	const img = createImage(`${profile.profpic}`,`${profile.first_name} ${profile.last_name}`,"w-full h-full object-cover object-center");
+	const img = createImage(`${profile.profpic}`, `${profile.profpic}` + "_path" ,`${profile.first_name} ${profile.last_name}`,"w-full h-full object-cover object-center");
 	imgWrapper.appendChild(img);
 
 
