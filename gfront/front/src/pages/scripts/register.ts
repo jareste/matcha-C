@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBtn, createDiv, createForm, createInp, createLab, createListItem, createMain, createSpan, createUl, showError } from "./cssTools";
+import { createBtn, createDiv, createForm, createInp, createLab, createListItem, createMain, createSpan, createUl, showError } from "./tools";
 import { checkValidEmail, checkValidPass, checkValidUser } from "./regex";
 
 initPage("register", () => {

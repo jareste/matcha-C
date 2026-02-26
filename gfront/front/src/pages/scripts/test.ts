@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBtn, createDiv, createImage } from "./cssTools";
+import { createBtn, createDiv, createImage } from "./tools";
 
 initPage("test", () => {
   const testContainer = document.getElementById("test-container");

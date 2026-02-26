@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBtn, createDiv, createForm, createInp, createLab, createMain, createSpan, showError } from "./cssTools";
+import { createBtn, createDiv, createForm, createInp, createLab, createMain, createSpan, showError } from "./tools";
 
 initPage("login", () => {
 	const loginContainer = document.getElementById("login-container");

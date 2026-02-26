@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createMain } from "./cssTools";
+import { createMain } from "./tools";
 
 initPage("validate", () => {
 	const validateContainer = document.getElementById("validate-container");

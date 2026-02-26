@@ -119,21 +119,6 @@ export function createH3(text:string, css:string)
 	return h3;
 }
 
-
-/*
-<form class="max-w-sm mx-auto">
-  <label for="countries" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Select an option</label>
-  <select id="countries" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
-	<option selected>Choose a country</option>
-	<option value="US">United States</option>
-	<option value="CA">Canada</option>
-	<option value="FR">France</option>
-	<option value="DE">Germany</option>
-  </select>
-</form>
-*/
-
-
 export function createSelect(id: string, css: string, options: {value: string, text: string}[])
 {
 	const select:HTMLSelectElement = document.createElement('select');
@@ -204,4 +189,72 @@ export function createSvgBut(id: string, css: string, svg: string)
 
 
 	return button;
+}
+
+
+export function carousel_reusable(name: string, img: string[], css_name: string)
+{
+	const carousel = createDiv(css_name + "-wrap");
+	const carousel_track = createDiv(css_name + "-track");
+	
+	let currentIndex = 0;
+	let i = 0;
+	img.forEach(src => 
+	{
+	  const carousel_slide = createDiv(css_name + "-slide");
+	  const carousel_img = createImage(src, "img_" + i, "profile_" + i, css_name + "-img"); // check if multiple img with same name will colide...
+	  carousel_slide.appendChild(carousel_img);
+	  carousel_track.appendChild(carousel_slide);
+	  i++;
+	});
+
+	
+	const carousel_btn_prev = createBtn("",name + "-prev", css_name + "-prev");
+
+	const carousel_btn_next = createBtn("",name + "-next", css_name + "-next");
+
+	carousel.appendChild(carousel_track);
+	carousel.appendChild(carousel_btn_prev);
+	carousel.appendChild(carousel_btn_next);
+	
+	//https://www.w3schools.com/jsref/prop_element_clientwidth.asp
+	//https://www.w3schools.com/jsref/tryit.asp?filename=tryjsref_element_clientheight
+	
+	function updateCarousel()
+	{
+		const slideWidth = carousel.clientWidth;
+		carousel_track.style.transform = `translateX(-${currentIndex * slideWidth}px)`;
+	}
+	
+	
+	function nextSlide()
+	{
+		if (currentIndex < img.length - 1)
+		{
+			currentIndex++;
+		}
+		else
+		{
+			currentIndex = 0;
+		}
+		updateCarousel();
+	}
+
+	function prevSlide()
+	{
+		if (currentIndex > 0)
+		{
+			currentIndex--;
+		}
+		else
+		{
+			currentIndex = img.length - 1;
+		}
+		updateCarousel();
+	}
+	
+	carousel_btn_next.onclick = nextSlide;
+	carousel_btn_prev.onclick = prevSlide;
+
+	return carousel;
 }

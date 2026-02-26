@@ -15,8 +15,8 @@ export interface Profile
 	gps_lon?: string;
 	location_optout?: boolean;
 	last_online?: string;
-	profpic?: string;
-	images?: string[];
+	profpic: string;
+	images: string[];
 	hashtags?: string[];
 }
 
@@ -45,7 +45,8 @@ const testprofile: Profile =
 
 
 import { initPage } from "../components/initPage";
-import { createBtn, createDiv, createH2, createH3, createImage, createListItem, createP, createSpan, createSvgBut, createUl, truncateText } from "./cssTools";
+import { createBtn, createDiv, createH2, createH3, createImage, createListItem, createP, createSpan, createSvgBut, createUl, truncateText, carousel_reusable } from "./tools";
+
 
 initPage("profile", () => {
 	const profileContainer = document.getElementById("profile-container");
@@ -61,8 +62,9 @@ function renderProfileContent(profile: Profile)
 	const card = createDiv("container mx-auto rounded-2xl overflow-hidden shadow-lg bg-white border");
 
 	const imgWrapper = createDiv("overflow-hidden");
+	const prof_carousel = carousel_reusable(profile.first_name, profile.images, "matchcar");
 	const img = createImage(`${profile.profpic}`, `${profile.profpic}` + "_path" ,`${profile.first_name} ${profile.last_name}`,"w-full h-full object-cover object-center");
-	imgWrapper.appendChild(img);
+	imgWrapper.appendChild(prof_carousel);
 
 
 	const info = createDiv("p-4");

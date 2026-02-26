@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBtn, createDiv, createImage, createInp } from "./cssTools";
+import { createBtn, createDiv, createImage, createInp } from "./tools";
 
 
 initPage("chats", () => {

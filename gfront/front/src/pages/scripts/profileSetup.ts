@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createDiv, createInp, createLab, createP } from "./cssTools";
+import { createDiv, createInp, createLab, createP } from "./tools";
 
 initPage("profile-setup", () => {
 	const profileSetupContainer = document.getElementById("profile-setup-container");

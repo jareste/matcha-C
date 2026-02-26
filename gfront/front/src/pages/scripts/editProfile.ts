@@ -1,5 +1,5 @@
 import { initPage } from "../components/initPage";
-import { createBtn, createDiv, createForm, createH2, createH3, createImage, createInp, createLab, createListItem, createMain, createP, createSelect, createSpan, createTextArea, createUl, truncateText } from "./cssTools";
+import { createBtn, createDiv, createForm, createH2, createH3, createImage, createInp, createLab, createListItem, createMain, createP, createSelect, createSpan, createTextArea, createUl, truncateText } from "./tools";
 import type { Profile } from "./profile";
 import { renderProfileSetup } from "./profileSetup";
 
