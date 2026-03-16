@@ -324,6 +324,9 @@ void api_umgmt_login(void* _ctx, void *user_data)
     write(ctx->fd, resp_body, blen);
     /* TODO_END */
 
+    if (existing_user->token)
+        free(existing_user->token);
+
     existing_user->token = strdup(token);
     if (db_tuser_update_user(get_db_id(), existing_user) == ERROR)
     {

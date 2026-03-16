@@ -130,6 +130,7 @@ int db_gen_parse_timestamp(const char *timestamp_str)
         return 0;
 
 
+    memset(&tm, 0, sizeof(struct tm));
     if (strptime(timestamp_str, "%Y-%m-%d %H:%M:%S", &tm) == NULL)
     {
         return 0;

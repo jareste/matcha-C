@@ -115,3 +115,7 @@
 ## Notes
 
 * **Password Storage:** Currently the password is stored directly in `password_hash`. Implement proper hashing before production.
+
+
+
+valgrind --leak-check=full --show-leak-kinds=definite,indirect,possible --errors-for-leak-kinds=definite,indirect,possible --show-reachable=no

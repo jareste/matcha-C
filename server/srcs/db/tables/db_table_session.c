@@ -114,6 +114,7 @@ session_t_array* db_tsession_select_for_user(DB_ID DB, int user_id)
     {
         ss[i] = make_session_from_row(res, i);
     }
+    db_clear_result(res);
     return arr;
 }
 
@@ -133,11 +134,11 @@ session_t *db_tsession_select_by_id(DB_ID DB, const char *session_id)
     if (!res) return NULL;
     if (PQntuples(res) != 1)
     {
-        PQclear(res);
+        db_clear_result(res);
         return NULL;
     }
     s = make_session_from_row(res, 0);
-    PQclear(res);
+    db_clear_result(res);
     return s;
 }
 

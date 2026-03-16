@@ -26,7 +26,7 @@
 #define SERVER_KEY "SOME_KEY"
 #define MAX_LOGIN_ROLES 3
 
-#define DYNAMIC_RCV
+// #define DYNAMIC_RCV
 
 #define REMOVE_CLIENT(fd)                                  \
   do {                                                     \
@@ -39,6 +39,8 @@
         m_client_sio_close_handler(fd);                    \
       if (_c->sio_sid)                                     \
         free(_c->sio_sid);                                 \
+      if (_c->rx_buf)                                      \
+        free(_c->rx_buf);                                  \
       free(_c);                                            \
     }                                                      \
     epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);        \
@@ -81,6 +83,11 @@ typedef struct
     int fd;
     client_state_t state;
     char* sio_sid;
+
+    char *rx_buf;
+    size_t rx_len;
+    size_t rx_cap;
+
     UT_hash_handle hh;
 } client_t;
 
@@ -449,6 +456,13 @@ int init_plain_socket(int port)
 
     setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
 
+    if (fcntl(sockfd, F_SETFL, O_NONBLOCK) < 0)
+    {
+        perror("fcntl");
+        close(sockfd);
+        return ERROR;
+    }
+
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = INADDR_ANY;
@@ -638,125 +652,308 @@ static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_
 }
 #endif
 
+static int client_read_into_buffer(client_t *c, size_t max_size)
+{
+    ssize_t n;
+
+    log_msg(LOG_LEVEL_DEBUG, "Reading from client fd=%d into buffer (current len=%zu, cap=%zu)\n", c->fd, c->rx_len, c->rx_cap);
+    for (;;)
+    {
+        if (c->rx_len == c->rx_cap)
+        {
+            size_t new_cap = c->rx_cap * 2;
+            char *tmp;
+
+            if (new_cap > max_size)
+                return ERROR;
+
+            tmp = realloc(c->rx_buf, new_cap);
+            if (!tmp)
+                return ERROR;
+
+            c->rx_buf = tmp;
+            c->rx_cap = new_cap;
+        }
+
+        n = recv(c->fd, c->rx_buf + c->rx_len, c->rx_cap - c->rx_len, 0);
+        if (n > 0)
+        {
+            c->rx_len += (size_t)n;
+            continue;
+        }
+        if (n == 0)
+        {
+            return ERROR; /* cliente cerró */
+        }
+        if (errno == EINTR)
+            continue;
+        if (errno == EAGAIN || errno == EWOULDBLOCK)
+            break;
+
+        return ERROR;
+    }
+
+    log_msg(LOG_LEVEL_DEBUG, "Finished reading from client fd=%d, total len=%zu\n", c->fd, c->rx_len);
+    return SUCCESS;
+}
+
+static int http_try_get_complete_request(
+    const char *buf,
+    size_t len,
+    size_t *request_len)
+{
+    char *headers_end;
+    size_t header_len;
+    size_t content_len = 0;
+    char *cl;
+    char *p;
+
+    if (len < 4)
+        return 0;
+
+    headers_end = ft_memmem(buf, len, "\r\n\r\n", 4);
+    if (!headers_end)
+        return 0; /* faltan headers */
+
+    header_len = (headers_end - buf) + 4;
+
+    cl = ft_memmem(buf, header_len, "Content-Length:", 15);
+    if (cl)
+    {
+        p = cl + 15;
+        while (p < buf + header_len && (*p == ' ' || *p == '\t'))
+            p++;
+        content_len = (size_t)strtoul(p, NULL, 10);
+    }
+
+    if (len < header_len + content_len)
+        return 0; /* falta body */
+
+    *request_len = header_len + content_len;
+    return 1; /* request completa */
+}
+
+static int handle_http_buffer(client_t *c)
+{
+    size_t req_len;
+    int ret;
+
+    for (;;)
+    {
+        ret = http_try_get_complete_request(c->rx_buf, c->rx_len, &req_len);
+        if (ret < 0)
+            return ERROR;
+        if (ret == 0)
+            break; /* faltan bytes */
+
+        if (m_is_sio_path(c->rx_buf))
+        {
+            if (strstr(c->rx_buf, "Upgrade: websocket") &&
+                strstr(c->rx_buf, "Sec-WebSocket-Key:"))
+            {
+                m_do_sio_ws_handshake(c->fd, c->rx_buf, c);
+                c->state = CS_SIO_WS_OPEN;
+            }
+            else if (m_http_request_handler)
+            {
+                if (m_http_request_handler(c->fd, c->rx_buf, req_len) == ERROR)
+                    return ERROR;
+            }
+        }
+        else if (strstr(c->rx_buf, "Upgrade: websocket") &&
+                 strstr(c->rx_buf, "Connection: Upgrade") &&
+                 strstr(c->rx_buf, "Sec-WebSocket-Key:"))
+        {
+            m_do_websocket_handshake(c->fd, c->rx_buf);
+            c->state = CS_WS_OPEN;
+        }
+        else if (m_http_request_handler)
+        {
+            if (m_http_request_handler(c->fd, c->rx_buf, req_len) == ERROR)
+                return ERROR;
+        }
+
+        /* elimina la request procesada y conserva sobrante */
+        if (req_len < c->rx_len)
+            memmove(c->rx_buf, c->rx_buf + req_len, c->rx_len - req_len);
+
+        c->rx_len -= req_len;
+
+        if (c->state != CS_HTTP)
+            break; /* ya cambió a WS */
+    }
+
+    return SUCCESS;
+}
+
+// int m_handle_client_event(int fd)
+// {
+// #ifdef DYNAMIC_RCV
+//     static char* buf = NULL;
+//     static size_t buf_len = 4096;
+// #else
+//     char buf[16384]; /* TODO review further */
+// #endif
+//     int ret;
+//     client_t* c;
+
+//     log_msg(LOG_LEVEL_ERROR, "Handling client event for fd=%d\n", fd);
+//     HASH_FIND_INT(clients, &fd, c);
+//     if (!c)
+//     {
+//         epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+//         close(fd);
+//         log_msg(LOG_LEVEL_ERROR, "Client not found in hash table: fd=%d\n", fd);
+//         return SUCCESS;
+//     }
+
+//     if (c->state == CS_WS_OPEN)
+//         return m_ws_handle_frame(c);
+
+//     if (c->state == CS_SIO_WS_OPEN) 
+//         return m_sio_ws_handle_frame(c);
+
+// #ifdef DYNAMIC_RCV
+//     ret = recv_all_request(fd, &buf, &buf_len, 4 * 1024 * 1024); /* max 4MB */
+//     if (ret != SUCCESS)
+// #else
+//     ret = recv(fd, buf, sizeof(buf) - 1, 0);
+//     if (ret <= 0)
+// #endif
+//     {
+//         log_msg(LOG_LEVEL_INFO, "Client disconnected or error: fd=%d\n", fd);
+//         REMOVE_CLIENT(fd);
+//         return SUCCESS;
+//     }
+
+// #ifdef DYNAMIC_RCV
+//     buf[buf_len] = '\0';
+// #else
+//     buf[ret] = '\0';
+// #endif
+
+//     if (m_is_sio_path(buf))
+//     {
+//         if (strstr(buf, "Upgrade: websocket") && strstr(buf, "Sec-WebSocket-Key:"))
+//         {
+//             m_do_sio_ws_handshake(fd, buf, c);
+//             c->state = CS_SIO_WS_OPEN;
+//             return SUCCESS;
+//         }
+//         /* means it's not a direct upgrade but 1st get http for checking and later on update request zzz. */
+//     }
+//     else if (strstr(buf, "Upgrade: websocket") &&
+//         strstr(buf, "Connection: Upgrade") &&
+//         strstr(buf, "Sec-WebSocket-Key:"))
+//     {
+//         m_do_websocket_handshake(fd, buf);
+//         c->state = CS_WS_OPEN;
+//         return SUCCESS;
+//     }
+//     else if (m_http_request_handler)
+//     {
+// #ifdef DYNAMIC_RCV
+//         ret = m_http_request_handler(fd, buf, buf_len);
+// #else
+//         ret = m_http_request_handler(fd, buf, ret);
+// #endif
+//         if (ret == ERROR)
+//         {
+//             log_msg(LOG_LEVEL_ERROR, "Error handling HTTP request for fd=%d\n", fd);
+//             REMOVE_CLIENT(fd);
+//             return ERROR;
+//         }
+//         // REMOVE_CLIENT(fd);
+//         return SUCCESS;
+//     }
+
+//     REMOVE_CLIENT(fd);
+//     return SUCCESS;
+// }
+
 int m_handle_client_event(int fd)
 {
-#ifdef DYNAMIC_RCV
-    static char* buf = NULL;
-    static size_t buf_len = 4096;
-#else
-    char buf[16384]; /* TODO review further */
-#endif
-    int ret;
-    client_t* c;
+    client_t *c;
 
-    log_msg(LOG_LEVEL_ERROR, "Handling client event for fd=%d\n", fd);
     HASH_FIND_INT(clients, &fd, c);
     if (!c)
     {
         epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);
         close(fd);
-        log_msg(LOG_LEVEL_ERROR, "Client not found in hash table: fd=%d\n", fd);
         return SUCCESS;
     }
 
     if (c->state == CS_WS_OPEN)
         return m_ws_handle_frame(c);
 
-    if (c->state == CS_SIO_WS_OPEN) 
+    if (c->state == CS_SIO_WS_OPEN)
         return m_sio_ws_handle_frame(c);
 
-#ifdef DYNAMIC_RCV
-    ret = recv_all_request(fd, &buf, &buf_len, 4 * 1024 * 1024); /* max 4MB */
-    if (ret != SUCCESS)
-#else
-    ret = recv(fd, buf, sizeof(buf) - 1, 0);
-    if (ret <= 0)
-#endif
+    log_msg(LOG_LEVEL_DEBUG, "Handling client event for fd=%d in HTTP state\n", fd);
+    if (client_read_into_buffer(c, 4 * 1024 * 1024) != SUCCESS)
     {
-        log_msg(LOG_LEVEL_INFO, "Client disconnected or error: fd=%d\n", fd);
         REMOVE_CLIENT(fd);
+        log_msg(LOG_LEVEL_INFO, "Client disconnected or error while reading: fd=%d\n", fd);
         return SUCCESS;
     }
+    log_msg(LOG_LEVEL_DEBUG, "Read %zu bytes from client fd=%d into buffer\n", c->rx_len, fd);
 
-#ifdef DYNAMIC_RCV
-    buf[buf_len] = '\0';
-#else
-    buf[ret] = '\0';
-#endif
-
-    if (m_is_sio_path(buf))
+    if (handle_http_buffer(c) != SUCCESS)
     {
-        if (strstr(buf, "Upgrade: websocket") && strstr(buf, "Sec-WebSocket-Key:"))
-        {
-            m_do_sio_ws_handshake(fd, buf, c);
-            c->state = CS_SIO_WS_OPEN;
-            return SUCCESS;
-        }
-        /* means it's not a direct upgrade but 1st get http for checking and later on update request zzz. */
-    }
-    else if (strstr(buf, "Upgrade: websocket") &&
-        strstr(buf, "Connection: Upgrade") &&
-        strstr(buf, "Sec-WebSocket-Key:"))
-    {
-        m_do_websocket_handshake(fd, buf);
-        c->state = CS_WS_OPEN;
-        return SUCCESS;
-    }
-    else if (m_http_request_handler)
-    {
-#ifdef DYNAMIC_RCV
-        ret = m_http_request_handler(fd, buf, buf_len);
-#else
-        ret = m_http_request_handler(fd, buf, ret);
-#endif
-        if (ret == ERROR)
-        {
-            log_msg(LOG_LEVEL_ERROR, "Error handling HTTP request for fd=%d\n", fd);
-            REMOVE_CLIENT(fd);
-            return ERROR;
-        }
-        // REMOVE_CLIENT(fd);
-        return SUCCESS;
+        REMOVE_CLIENT(fd);
+        return ERROR;
     }
 
-    REMOVE_CLIENT(fd);
     return SUCCESS;
 }
+
 
 int m_handle_new_client(int fd)
 {
     struct sockaddr_in client_addr;
-    socklen_t addr_len = sizeof(client_addr);
+    socklen_t addr_len;
     int client_fd;
     int flags;
     struct epoll_event ev;
     client_t* c;
 
-    client_fd = accept(fd, (struct sockaddr*)&client_addr, &addr_len);
-    if (client_fd < 0)
+    for (;;)
     {
-        perror("accept");
-        return ERROR;
+        addr_len = sizeof(client_addr);
+
+        memset(&client_addr, 0, sizeof(client_addr));
+        client_fd = accept(fd, (struct sockaddr*)&client_addr, &addr_len);
+        if (client_fd < 0)
+        {
+            if (errno == EAGAIN || errno == EWOULDBLOCK)
+                break;
+            perror("accept");
+            return ERROR;
+        }
+
+        log_msg(LOG_LEVEL_INFO, "New client connected: fd=%d\n", client_fd);
+
+        flags = fcntl(client_fd, F_GETFL, 0);
+        fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
+
+        memset(&ev, 0, sizeof(ev));
+        ev.events = EPOLLIN | EPOLLET;
+        ev.data.fd = client_fd;
+        if (epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
+        {
+            perror("epoll_ctl: add client");
+            close(client_fd);
+            return ERROR;
+        }
+
+        c = calloc(1, sizeof(*c));
+        c->fd = client_fd;
+        c->state = CS_HTTP;
+        c->rx_cap = 4096;
+        c->rx_buf = calloc(1, c->rx_cap);
+        c->rx_len = 0;
+        HASH_ADD_INT(clients, fd, c);
     }
-
-    log_msg(LOG_LEVEL_INFO, "New client connected: fd=%d\n", client_fd);
-
-    flags = fcntl(client_fd, F_GETFL, 0);
-    fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
-
-    ev.events = EPOLLIN | EPOLLET;
-    ev.data.fd = client_fd;
-    if (epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
-    {
-        perror("epoll_ctl: add client");
-        close(client_fd);
-        return ERROR;
-    }
-
-    c = calloc(1, sizeof(*c));
-    c->fd = client_fd;
-    c->state = CS_HTTP;
-    HASH_ADD_INT(clients, fd, c);
 
     return SUCCESS;
 }

@@ -147,11 +147,11 @@ static void m_fill_user_with_PGresult_row(user_t* user, PGresult* res, int row, 
         free(user->last_online);
         user->last_online = NULL;
     }
-    if (EMPTY_STRING(user->token))
-    {
+    // if (EMPTY_STRING(user->token))
+    // {
         free(user->token);
         user->token = NULL;
-    }
+    // }
 }
 
 user_t_array* db_tuser_select_all_users(DB_ID DB)
@@ -254,6 +254,7 @@ int db_select_user_by_email(DB_ID DB, const char* email, user_t** user)
     else
     {
         *user = NULL;
+        db_clear_result(r2);
         return ERROR;
     }
 
@@ -279,6 +280,7 @@ int db_select_user_by_id(DB_ID DB, int id, user_t** user)
     else
     {
         *user = NULL;
+        db_clear_result(r2);
         return ERROR;
     }
 

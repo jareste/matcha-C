@@ -3,8 +3,8 @@ NAME = matCha
 #########
 RM = rm -rf
 CC = cc
-# CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
-CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
+CFLAGS = -Werror -Wextra -Wall -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
+# CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=thread -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # POSTGRESS_LIB = -lpq
@@ -114,6 +114,7 @@ fclean: clean
 	@make --silent -C srcs/api fclean
 	@make --silent -C $(MULTIPARSER_DIR) clean
 	@$(RM) $(NAME)
+	@$(RM) $(cJSON_LIB) $(cJSON_OBJ)
 	@cd $(OPENSSL_SRC_DIR) 2>/dev/null && [ -f Makefile ] && make clean || true
 	@rm -rf $(OPENSSL_INSTALL_DIR)
 	@echo "EVERYTHING REMOVED   "
