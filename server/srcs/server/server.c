@@ -26,8 +26,6 @@
 #define SERVER_KEY "SOME_KEY"
 #define MAX_LOGIN_ROLES 3
 
-// #define DYNAMIC_RCV
-
 #define REMOVE_CLIENT(fd)                                  \
   do {                                                     \
     client_t *_c;                                          \
@@ -485,173 +483,6 @@ int init_plain_socket(int port)
     return sockfd;
 }
 
-#ifdef DYNAMIC_RCV
-static int recv_all_request(int fd, char **out_buf, size_t *out_len, size_t max_size)
-{
-    const size_t CHUNK = 4096;
-    size_t cap = CHUNK;
-    size_t len = 0;
-    size_t header_len;
-    size_t content_len;
-    size_t need;
-    size_t grow;
-    char* buf = *out_buf;
-    char* tmp;
-    char* headers_end;
-    char* content_len_hdr;
-    char* p;
-    ssize_t n;
-    int headers_found = 0;
-    size_t headers_end_off = 0;
-
-    if (!buf || (*out_len > CHUNK))
-    {
-        buf = realloc(buf, CHUNK);
-        *out_buf = buf;
-    }
-
-    for (;;)
-    {
-        if (len == cap)
-        {
-            if (cap > max_size - CHUNK)
-                return ERROR;
-
-            cap += CHUNK;
-            tmp = realloc(buf, cap);
-
-            buf = tmp;
-        }
-
-        n = recv(fd, buf + len, cap - len, 0);
-        if (n == 0)
-        {
-            log_msg(LOG_LEVEL_INFO, "Client closed2 connection: fd=%d\n", fd);
-            return ERROR;
-        }
-        if (n < 0)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-            {
-                break;
-            }
-            if (errno == EINTR)
-            {
-                continue;
-            }
-            log_msg(LOG_LEVEL_ERROR, "recv error2 on fd=%d: %s\n", fd, strerror(errno));
-            return ERROR;
-        }
-        len += (size_t)n;
-
-        headers_end = NULL;
-        if (!headers_found && len >= 4)
-        {
-            headers_end = ft_memmem(buf, len, "\r\n\r\n", 4);
-            if (headers_end)
-            {
-                headers_found = 1;
-                headers_end_off = (headers_end - buf) + 4;
-                break;
-            }
-        }
-    }
-
-    header_len = headers_end_off;
-    // content_len_hdr = ft_memmem(buf, header_len, "Content-Length:", 15);
-    // content_len = 0;
-
-    // if (content_len_hdr)
-    // {
-    //     p = content_len_hdr + 15;
-    //     while (p < (buf + header_len) && (*p == ' ' || *p == '\t'))
-    //         p++;
-    //     content_len = (size_t) strtoul(p, NULL, 10);
-    // }
-    // else
-    // {
-    //     log_msg(LOG_LEVEL_ERROR, "Content-Length header not found\n");
-    //     return ERROR;
-    // }
-
-    // need = headers_end_off + content_len;
-    // if (need > max_size)
-    // {
-    //     log_msg(LOG_LEVEL_ERROR, "Request size exceeds maximum limit\n");
-    //     return ERROR;
-    // }
-    content_len_hdr = ft_memmem(buf, header_len, "Content-Length:", 15);
-    content_len = 0;
-
-    if (content_len_hdr)
-    {
-        p = content_len_hdr + 15;
-        while (p < (buf + header_len) && (*p == ' ' || *p == '\t'))
-            p++;
-        content_len = (size_t) strtoul(p, NULL, 10);
-    }
-    else
-    {
-        // No Content-Length → assume no body
-        log_msg(LOG_LEVEL_DEBUG, "No Content-Length header, treating as body length 0\n");
-    }
-
-    need = headers_end_off + content_len;
-    if (need > max_size)
-    {
-        log_msg(LOG_LEVEL_ERROR, "Request size exceeds maximum limit\n");
-        return ERROR;
-    }
-
-
-    while (len < need)
-    {
-        if (len == cap)
-        {
-            grow = (need - cap) > CHUNK ? CHUNK : (need - cap);
-            if (cap > max_size - grow)
-            {
-                log_msg(LOG_LEVEL_ERROR, "Request size exceeds maximum limit\n");
-                return ERROR;
-            }
-            cap += grow;
-            tmp = realloc(buf, cap);
-            buf = tmp;
-        }
-        n = recv(fd, buf + len, cap - len, 0);
-        // if (n <= 0)
-        // {
-        //     log_msg(LOG_LEVEL_ERROR, "recv error or connection closed 2 on fd=%d\n", fd);
-        //     return ERROR;
-        // }
-        if (n == 0)
-        {
-            log_msg(LOG_LEVEL_INFO, "Client closed connection: fd=%d\n", fd);
-            return ERROR;
-        }
-        if (n < 0)
-        {
-            if (errno == EAGAIN || errno == EWOULDBLOCK)
-            {
-                break;
-            }
-            if (errno == EINTR)
-            {
-                continue;
-            }
-            log_msg(LOG_LEVEL_ERROR, "recv error on fd=%d: %s\n", fd, strerror(errno));
-            return ERROR;
-        }
-
-        len += (size_t)n;
-    }
-
-    *out_buf = buf;
-    *out_len = need;
-    return SUCCESS;
-}
-#endif
-
 static int client_read_into_buffer(client_t *c, size_t max_size)
 {
     ssize_t n;
@@ -697,10 +528,7 @@ static int client_read_into_buffer(client_t *c, size_t max_size)
     return SUCCESS;
 }
 
-static int http_try_get_complete_request(
-    const char *buf,
-    size_t len,
-    size_t *request_len)
+static int http_try_get_complete_request(const char *buf, size_t len, size_t *request_len)
 {
     char *headers_end;
     size_t header_len;
@@ -713,7 +541,7 @@ static int http_try_get_complete_request(
 
     headers_end = ft_memmem(buf, len, "\r\n\r\n", 4);
     if (!headers_end)
-        return 0; /* faltan headers */
+        return 0;
 
     header_len = (headers_end - buf) + 4;
 
@@ -727,10 +555,10 @@ static int http_try_get_complete_request(
     }
 
     if (len < header_len + content_len)
-        return 0; /* falta body */
+        return 0;
 
     *request_len = header_len + content_len;
-    return 1; /* request completa */
+    return 1;
 }
 
 static int handle_http_buffer(client_t *c)
@@ -744,7 +572,7 @@ static int handle_http_buffer(client_t *c)
         if (ret < 0)
             return ERROR;
         if (ret == 0)
-            break; /* faltan bytes */
+            break;
 
         if (m_is_sio_path(c->rx_buf))
         {
@@ -773,103 +601,17 @@ static int handle_http_buffer(client_t *c)
                 return ERROR;
         }
 
-        /* elimina la request procesada y conserva sobrante */
         if (req_len < c->rx_len)
             memmove(c->rx_buf, c->rx_buf + req_len, c->rx_len - req_len);
 
         c->rx_len -= req_len;
 
         if (c->state != CS_HTTP)
-            break; /* ya cambió a WS */
+            break;
     }
 
     return SUCCESS;
 }
-
-// int m_handle_client_event(int fd)
-// {
-// #ifdef DYNAMIC_RCV
-//     static char* buf = NULL;
-//     static size_t buf_len = 4096;
-// #else
-//     char buf[16384]; /* TODO review further */
-// #endif
-//     int ret;
-//     client_t* c;
-
-//     log_msg(LOG_LEVEL_ERROR, "Handling client event for fd=%d\n", fd);
-//     HASH_FIND_INT(clients, &fd, c);
-//     if (!c)
-//     {
-//         epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);
-//         close(fd);
-//         log_msg(LOG_LEVEL_ERROR, "Client not found in hash table: fd=%d\n", fd);
-//         return SUCCESS;
-//     }
-
-//     if (c->state == CS_WS_OPEN)
-//         return m_ws_handle_frame(c);
-
-//     if (c->state == CS_SIO_WS_OPEN) 
-//         return m_sio_ws_handle_frame(c);
-
-// #ifdef DYNAMIC_RCV
-//     ret = recv_all_request(fd, &buf, &buf_len, 4 * 1024 * 1024); /* max 4MB */
-//     if (ret != SUCCESS)
-// #else
-//     ret = recv(fd, buf, sizeof(buf) - 1, 0);
-//     if (ret <= 0)
-// #endif
-//     {
-//         log_msg(LOG_LEVEL_INFO, "Client disconnected or error: fd=%d\n", fd);
-//         REMOVE_CLIENT(fd);
-//         return SUCCESS;
-//     }
-
-// #ifdef DYNAMIC_RCV
-//     buf[buf_len] = '\0';
-// #else
-//     buf[ret] = '\0';
-// #endif
-
-//     if (m_is_sio_path(buf))
-//     {
-//         if (strstr(buf, "Upgrade: websocket") && strstr(buf, "Sec-WebSocket-Key:"))
-//         {
-//             m_do_sio_ws_handshake(fd, buf, c);
-//             c->state = CS_SIO_WS_OPEN;
-//             return SUCCESS;
-//         }
-//         /* means it's not a direct upgrade but 1st get http for checking and later on update request zzz. */
-//     }
-//     else if (strstr(buf, "Upgrade: websocket") &&
-//         strstr(buf, "Connection: Upgrade") &&
-//         strstr(buf, "Sec-WebSocket-Key:"))
-//     {
-//         m_do_websocket_handshake(fd, buf);
-//         c->state = CS_WS_OPEN;
-//         return SUCCESS;
-//     }
-//     else if (m_http_request_handler)
-//     {
-// #ifdef DYNAMIC_RCV
-//         ret = m_http_request_handler(fd, buf, buf_len);
-// #else
-//         ret = m_http_request_handler(fd, buf, ret);
-// #endif
-//         if (ret == ERROR)
-//         {
-//             log_msg(LOG_LEVEL_ERROR, "Error handling HTTP request for fd=%d\n", fd);
-//             REMOVE_CLIENT(fd);
-//             return ERROR;
-//         }
-//         // REMOVE_CLIENT(fd);
-//         return SUCCESS;
-//     }
-
-//     REMOVE_CLIENT(fd);
-//     return SUCCESS;
-// }
 
 int m_handle_client_event(int fd)
 {
@@ -906,7 +648,6 @@ int m_handle_client_event(int fd)
 
     return SUCCESS;
 }
-
 
 int m_handle_new_client(int fd)
 {
