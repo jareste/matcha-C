@@ -247,8 +247,8 @@ def sio_mode():
         if cmd.lower() in ("exit", "quit"): break
         if cmd.startswith("emit "):
             try:
-                _, event, data = cmd.split(" ", 2)
-                # data = json.loads(json_data)
+                _, event, json_data = cmd.split(" ", 2)
+                data = json.loads(json_data)
                 with emit_lock:
                     emit_queue.append((event, data))
             except Exception as e:

@@ -184,7 +184,7 @@ void api_umgmt_logout(void* _ctx, void *user_data)
     );
     header_buf[hlen] = '\0';
     write(ctx->fd, header_buf, hlen);
-    printf("User logged out successfully\n");
+    log_msg(LOG_LEVEL_DEBUG, "User logged out successfully\n");
 
 }
 
@@ -244,7 +244,7 @@ void api_umgmt_login(void* _ctx, void *user_data)
         goto cleanup;
     }
 
-    printf("request body: %s\n", ctx->parsed_request.body);
+    log_msg(LOG_LEVEL_DEBUG, "request body: %s\n", ctx->parsed_request.body);
     email_item = cJSON_GetObjectItemCaseSensitive(json, "email");
     if (!email_item || !cJSON_IsString(email_item) || (email_item->valuestring == NULL))
     {
@@ -305,7 +305,7 @@ void api_umgmt_login(void* _ctx, void *user_data)
     }
     free(uname);
     free(email);
-    printf("Generating token for user %s\n", existing_user->username);
+    log_msg(LOG_LEVEL_DEBUG, "Generating token for user %s\n", existing_user->username);
 
     char header_buf[2048];
     int hlen = snprintf(header_buf, sizeof(header_buf),
@@ -330,9 +330,9 @@ void api_umgmt_login(void* _ctx, void *user_data)
     existing_user->token = strdup(token);
     if (db_tuser_update_user(get_db_id(), existing_user) == ERROR)
     {
-        printf("Failed to update user token in database\n");
+        log_msg(LOG_LEVEL_DEBUG, "Failed to update user token in database\n");
     }
-    printf("User %s logged in successfully with token: \n'%s'\n", existing_user->username, existing_user->token);
+    log_msg(LOG_LEVEL_DEBUG, "User %s logged in successfully with token: \n'%s'\n", existing_user->username, existing_user->token);
 
     // router_http_generate_response(ctx->fd, CODE_200_OK,
     //     "{\"success\":true, \"message\":\"Login successful\"}", NULL);

@@ -26,26 +26,29 @@
 #define SERVER_KEY "SOME_KEY"
 #define MAX_LOGIN_ROLES 3
 
-#define REMOVE_CLIENT(fd)                                  \
-  do {                                                     \
-    client_t *_c;                                          \
-    HASH_FIND_INT(clients, &fd, _c);                       \
-    if (_c)                                                \
-    {                                                      \
-      HASH_DEL(clients, _c);                               \
-      if (_c->state == CS_SIO_WS_OPEN && m_client_sio_close_handler) \
-        m_client_sio_close_handler(fd);                    \
-      if (_c->sio_sid)                                     \
-        free(_c->sio_sid);                                 \
-      if (_c->rx_buf)                                      \
-        free(_c->rx_buf);                                  \
-      free(_c);                                            \
-    }                                                      \
-    epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);        \
-    log_msg(LOG_LEVEL_INFO, "Removing client %d (invoked from %s:%d in %s)\n", \
-            fd, __FILE__, __LINE__, __func__);             \
-    close(fd);                                             \
-  } while (0)
+/*
+// #define REMOVE_CLIENT(fd)                                  \
+//   do {                                                     \
+//     client_t *_c;                                          \
+//     HASH_FIND_INT(clients, &fd, _c);                       \
+//     if (_c)                                                \
+//     {                                                      \
+//       HASH_DEL(clients, _c);                               \
+//       if (_c->state == CS_SIO_WS_OPEN && m_client_sio_close_handler) \
+//         m_client_sio_close_handler(fd);                    \
+//       if (_c->sio_sid)                                     \
+//         free(_c->sio_sid);                                 \
+//       if (_c->rx_buf)                                      \
+//         free(_c->rx_buf);                                  \
+//       free(_c);                                            \
+//     }                                                      \
+//     epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);        \
+//     log_msg(LOG_LEVEL_INFO, "Removing client %d (%p) (invoked from %s:%d in %s)\n", \
+//             fd, _c, __FILE__, __LINE__, __func__);             \
+//     close(fd);                                             \
+//   } while (0)
+*/
+
 
 /* DEBUG */
 /*
@@ -102,6 +105,31 @@ static on_request m_ws_request_handler = NULL;
 static on_request m_sio_request_handler = NULL;
 static on_new_client m_new_sio_client_handler = NULL;
 static on_client_close m_client_sio_close_handler = NULL;
+
+static inline void remove_client_impl(int fd, const char *file, int line, const char *func)
+{
+    client_t *_c;
+
+    HASH_FIND_INT(clients, &fd, _c);
+    if (_c)
+    {
+        HASH_DEL(clients, _c);
+        if (_c->state == CS_SIO_WS_OPEN && m_client_sio_close_handler)
+            m_client_sio_close_handler(fd);
+        if (_c->sio_sid)
+            free(_c->sio_sid);
+        if (_c->rx_buf)
+            free(_c->rx_buf);
+        free(_c);
+    }
+    epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+    log_msg(LOG_LEVEL_INFO, "Removing client %d (invoked from %s:%d in %s)\n",
+            fd, file, line, func);
+    close(fd);
+}
+
+#define REMOVE_CLIENT(fd) remove_client_impl((fd), __FILE__, __LINE__, __func__)
+
 
 /* not liking it */
 int validate_cookies(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin);
@@ -176,7 +204,7 @@ static int m_ws_parse_frame(int fd, uint8_t *hdr, uint8_t **payload, uint64_t *l
         recv(fd, mask, 4, MSG_WAITALL);
     }
 
-    *payload = malloc(*len);
+    *payload = malloc((*len) + 1);
 
     n = recv(fd, *payload, *len, MSG_WAITALL);
     if (n < 0)
@@ -207,6 +235,8 @@ static int m_ws_read_text_payload(int fd, char **payload, size_t *len)
     bool masked;
     uint64_t payload_len;
 
+    *payload = NULL;
+    *len = 0;
     if (m_ws_parse_frame(fd, hdr, &raw_payload, &payload_len, mask, &masked) == ERROR)
     {
         *payload = NULL;
@@ -378,6 +408,7 @@ static int m_sio_ws_handle_frame(client_t *c)
 
     if (m_ws_read_text_payload(c->fd, &payload, &len) == ERROR)
     {
+        log_msg(LOG_LEVEL_ERROR, "Failed to read WebSocket payload for fd=%p\n", c);
         REMOVE_CLIENT(c->fd);
         if (payload)
             free(payload);

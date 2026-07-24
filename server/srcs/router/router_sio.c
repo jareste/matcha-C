@@ -159,7 +159,7 @@ int sio_on_open(int fd, int uid)
     data->fd  = fd;
     data->uid = uid;
     HASH_ADD_INT(sio_connections, fd, data);
-    log_msg(LOG_LEVEL_INFO, "SIO open fd=%d uid=%d", fd, uid);
+    log_msg(LOG_LEVEL_INFO, "SIO open fd=%d uid=%d\n", fd, uid);
     return SUCCESS;
 }
 
@@ -172,7 +172,7 @@ int sio_on_close(int fd)
     {
         HASH_DEL(sio_connections, d);
         free(d);
-        log_msg(LOG_LEVEL_INFO, "SIO closed fd=%d", fd);
+        log_msg(LOG_LEVEL_INFO, "SIO closed fd=%d\n", fd);
     }
     return SUCCESS;
 }
