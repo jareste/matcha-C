@@ -188,6 +188,7 @@ void pics_get(void* _ctx, void* user_data)
     char* buf;
     char header[512];
     int header_len;
+    int kch;
 
     if (!ctx) return;
     (void)user_data;
@@ -231,7 +232,8 @@ void pics_get(void* _ctx, void* user_data)
     log_msg(LOG_LEVEL_DEBUG, "Picture file size: %ld bytes\n", size);
 
     buf = malloc(size);
-    fread(buf, 1, size, f);
+    kch = fread(buf, 1, size, f);
+    (void)kch; /* avoid unused variable warning */
     fclose(f);
 
     header_len = snprintf(header, sizeof(header),

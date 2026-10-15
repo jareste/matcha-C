@@ -423,8 +423,10 @@ static void m_server_send_ping()
     uint64_t expirations;
     client_t *c;
     client_t *tmp;
+    int kch;
 
-    read(m_timer_fd, &expirations, sizeof(expirations));
+    kch = read(m_timer_fd, &expirations, sizeof(expirations));
+    (void)kch; /* avoid unused variable warning */
 
     HASH_ITER(hh, clients, c, tmp)
     {

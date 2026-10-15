@@ -1,0 +1,14 @@
+# The idea of the dockerignore is to avoid copying build artifacts into the docker image, which may cause
+# them to not build properly into the container as it could appear the error 'already up to date'
+**/objs/
+**/*.o
+**/*.a
+**/*.d
+matCha
+third_party/openssl/
+third_party/openssl_build/
+third_party/openssl_install/
+certs/
+log.txt
+cookies.pkl
+.git/

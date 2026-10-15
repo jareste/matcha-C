@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:15
+    container_name: matcha-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: 1234qwer
+      POSTGRES_DB: matcha_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d matcha_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: matcha-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: 1234qwer
+      DB_NAME: matcha_db
+      PORT: 8080
+      LOG_LEVEL: 10
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
