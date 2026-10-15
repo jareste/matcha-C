@@ -184,7 +184,7 @@ void api_umgmt_logout(void* _ctx, void *user_data)
     );
     header_buf[hlen] = '\0';
     write(ctx->fd, header_buf, hlen);
-    printf("User logged out successfully\n");
+    log_msg(LOG_LEVEL_DEBUG, "User logged out successfully\n");
 
 }
 

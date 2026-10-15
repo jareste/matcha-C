@@ -108,7 +108,7 @@ void chat_send_msg(void* req_ctx, void* user_data)
 
     ctx = (sio_request_ctx_t*)req_ctx;
     
-    (void)user_data; // Unused parameter
+    (void)user_data;
     log_msg(LOG_LEVEL_DEBUG, "************************************************\n");
 
     log_msg(LOG_LEVEL_DEBUG, "Chat message send request from fd=%d\n", ctx->fd);

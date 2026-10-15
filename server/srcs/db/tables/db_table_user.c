@@ -1,5 +1,6 @@
 #include "../../../inc/error_codes.h"
 #include "../../../inc/ft_malloc.h"
+#include "../../log/log_api.h"
 #include "../db_gen.h"
 #include "../db_api.h"
 #include "db_table_user.h"
@@ -134,7 +135,7 @@ static void m_fill_user_with_PGresult_row(user_t* user, PGresult* res, int row, 
     user->email_verified = (strcmp(PQgetvalue(res, row, 15), "t") == 0);
     user->token = want_token ? strdup(PQgetvalue(res, row, 16)) : NULL;
 
-    printf("db_tuser_fill_user: id=%d, username=%s, email=%s, first_name=%s, last_name=%s\n",
+    log_msg(LOG_LEVEL_DEBUG, "db_tuser_fill_user: id=%d, username=%s, email=%s, first_name=%s, last_name=%s\n",
            user->id, user->username, user->email, user->first_name, user->last_name);
 
     if (EMPTY_STRING(user->bio))
@@ -147,11 +148,11 @@ static void m_fill_user_with_PGresult_row(user_t* user, PGresult* res, int row, 
         free(user->last_online);
         user->last_online = NULL;
     }
-    // if (EMPTY_STRING(user->token))
-    // {
+    if (EMPTY_STRING(user->token))
+    {
         free(user->token);
         user->token = NULL;
-    // }
+    }
 }
 
 user_t_array* db_tuser_select_all_users(DB_ID DB)

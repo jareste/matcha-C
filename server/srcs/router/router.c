@@ -68,6 +68,10 @@ int router_validate_token_for_server(int fd, const char* request, char** out_use
     char* cookies;
     char* auth_cookie;
 
+    *out_username = NULL;
+    *out_email = NULL;
+    *out_uid = 0;
+
     cookies = get_header_value(request, "Cookie");
     if (!cookies)
     {
@@ -117,8 +121,16 @@ int router_validate_token_for_server(int fd, const char* request, char** out_use
         log_msg(LOG_LEVEL_ERROR, "\nutoken: '%s'\natoken: '%s'\n", user->token, auth_cookie + 6);
         log_msg(LOG_LEVEL_ERROR, "Invalid token for user %s (uid=%d),\n'%s'\n", *out_username, *out_uid, user->token);
         if (user) db_tuser_free_user(user);
-        if (*out_email) free(*out_email);
-        if (*out_username) free(*out_username);
+        if (*out_email)
+        {
+            free(*out_email);
+            *out_email = NULL;
+        }
+        if (*out_username)
+        {
+            free(*out_username);
+            *out_username = NULL;
+        }
         free(cookies);
         return ERROR;
     }
