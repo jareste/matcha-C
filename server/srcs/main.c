@@ -111,6 +111,7 @@ int main()
 {
     ssl_config ssl_config;
     log_config log_config;
+    db_config db_config;
     
     if (parse_config("config") == ERROR)
             goto error;
@@ -118,8 +119,10 @@ int main()
     parse_set_log_config(&log_config);
     log_init(log_config.LOG_FILE_PATH, log_config.LOG_ERASE, log_config.LOG_LEVEL);
 
+    parse_set_db_config(&db_config);
     parse_set_ssl_config(&ssl_config);
-    if (server_init(ssl_config.PORT) == ERROR)
+    if (server_init(ssl_config.PORT, ssl_config.SSL_ENABLE,
+                    ssl_config.CERT_PATH, ssl_config.KEY_PATH) == ERROR)
         goto error;
 
     server_set_request_handlers(m_http_request_handler, m_ws_request_handler, m_sio_request_handler);
@@ -127,7 +130,12 @@ int main()
     server_set_client_close_handler(sio_on_close);
 
     if (m_init_dbs(&m_DB) == ERROR)
+    {
+        log_msg(LOG_LEVEL_ERROR,
+                "Database init failed (host=%s port=%s db=%s): is postgres up and reachable?\n",
+                db_config.DB_HOST, db_config.DB_PORT, db_config.DB_NAME);
         goto error;
+    }
 
     api_init();
     

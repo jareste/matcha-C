@@ -17,6 +17,7 @@ typedef struct
     char* LOG_FILE_PATH;
     bool LOG_ERASE;
 
+    bool SSL_ENABLE;
     char* CERT_PATH;
     char* KEY_PATH;
     int PORT;
@@ -40,8 +41,9 @@ static void m_init_config_content()
     m_config_content->LOG_FILE_PATH = strdup("log.txt");
     m_config_content->LOG_ERASE = true;
 
-    m_config_content->CERT_PATH = strdup("cert.pem");
-    m_config_content->KEY_PATH = strdup("key.pem");
+    m_config_content->SSL_ENABLE = false;
+    m_config_content->CERT_PATH = strdup("certs/cert.pem");
+    m_config_content->KEY_PATH = strdup("certs/key.pem");
     m_config_content->PORT = 12345;
 
     m_config_content->DB_HOST = strdup("localhost");
@@ -60,6 +62,7 @@ void parse_set_log_config(log_config* log)
 
 void parse_set_ssl_config(ssl_config* ssl)
 {
+    ssl->SSL_ENABLE = m_config_content->SSL_ENABLE;
     ssl->CERT_PATH = m_config_content->CERT_PATH;
     ssl->KEY_PATH = m_config_content->KEY_PATH;
     ssl->PORT = m_config_content->PORT;
@@ -147,6 +150,11 @@ int parse_config(const char *filename)
         {
             c = val[0];
             m_config_content->LOG_ERASE = (c=='y'||c=='Y'||c=='1');
+        }
+        else if (strcmp(key, "SSL_ENABLE") == 0)
+        {
+            c = val[0];
+            m_config_content->SSL_ENABLE = (c=='y'||c=='Y'||c=='1');
         }
         else if (strcmp(key, "CERT_PATH") == 0)
         {

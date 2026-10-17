@@ -21,6 +21,7 @@
 #include "../log/log_api.h"
 #include "../../third_party/uthash-master/src/uthash.h"
 #include "server_api.h"
+#include "conn_api.h"
 
 /* defines */
 #define SERVER_KEY "SOME_KEY"
@@ -74,6 +75,7 @@ do { \
 /* Typedefs */
 typedef enum
 {
+    CS_TLS_HANDSHAKE, /* TLS negotiation not finished yet */
     CS_HTTP, /* HTTP */
     CS_SIO_WS_OPEN, /* socket.io */
     CS_WS_OPEN /* raw ws */
@@ -122,6 +124,7 @@ static inline void remove_client_impl(int fd, const char *file, int line, const 
             free(_c->rx_buf);
         free(_c);
     }
+    conn_unregister(fd);
     epoll_ctl(m_epoll_fd, EPOLL_CTL_DEL, fd, NULL);
     log_msg(LOG_LEVEL_INFO, "Removing client %d (invoked from %s:%d in %s)\n",
             fd, file, line, func);
@@ -160,13 +163,8 @@ void server_set_request_handlers(on_request http_handler, on_request ws_handler,
 static int m_send_ws_frame(int fd, uint8_t opcode, const void *data, size_t len, bool is_text)
 {
     uint8_t hdr[2] = { (is_text ? 0x81 : 0x80) | opcode, (uint8_t)len };
-    struct iovec iov[2] =
-    {
-        { .iov_base = hdr, .iov_len = 2 },
-        { .iov_base = (void*)data, .iov_len = len }
-    };
 
-    return writev(fd, iov, 2) >= 0 ? SUCCESS : ERROR;
+    return conn_writev2(fd, hdr, 2, data, len) >= 0 ? SUCCESS : ERROR;
 }
 
 static int m_ws_parse_frame(int fd, uint8_t *hdr, uint8_t **payload, uint64_t *len, uint8_t *mask, bool *masked)
@@ -176,8 +174,8 @@ static int m_ws_parse_frame(int fd, uint8_t *hdr, uint8_t **payload, uint64_t *l
     uint64_t ext64;
     int n;
 
-    n = recv(fd, hdr, 2, 0);
-    if (n <= 0)
+    n = conn_read_exact(fd, hdr, 2);
+    if (n != SUCCESS)
     {
         log_msg(LOG_LEVEL_ERROR, "Failed to read WebSocket frame header from fd=%d\n", fd);
         *payload = NULL;
@@ -190,24 +188,41 @@ static int m_ws_parse_frame(int fd, uint8_t *hdr, uint8_t **payload, uint64_t *l
 
     if (*len == 126)
     {
-        recv(fd, &ext16, 2, MSG_WAITALL);
+        if (conn_read_exact(fd, &ext16, 2) != SUCCESS)
+        {
+            *payload = NULL;
+            *len = 0;
+            return ERROR;
+        }
         *len = ntohs(ext16);
     }
     else if (*len == 127)
     {
-        recv(fd, &ext64, 8, MSG_WAITALL);
+        if (conn_read_exact(fd, &ext64, 8) != SUCCESS)
+        {
+            *payload = NULL;
+            *len = 0;
+            return ERROR;
+        }
         *len = be64toh(ext64);
     }
 
-    if (*masked)
+    if (*masked && conn_read_exact(fd, mask, 4) != SUCCESS)
     {
-        recv(fd, mask, 4, MSG_WAITALL);
+        *payload = NULL;
+        *len = 0;
+        return ERROR;
     }
 
     *payload = malloc((*len) + 1);
+    if (!*payload)
+    {
+        *len = 0;
+        return ERROR;
+    }
 
-    n = recv(fd, *payload, *len, MSG_WAITALL);
-    if (n < 0)
+    n = (*len > 0) ? conn_read_exact(fd, *payload, *len) : SUCCESS;
+    if (n != SUCCESS)
     {
         free(*payload);
         *payload = NULL;
@@ -323,7 +338,7 @@ static void m_do_websocket_handshake(int fd, const char *req)
     char *key = get_header_value(req, "Sec-WebSocket-Key");
     char accept[64];
     m_compute_ws_accept(key, accept);
-    dprintf(fd,
+    conn_printf(fd,
         "HTTP/1.1 101 Switching Protocols\r\n"
         "Upgrade: websocket\r\n"
         "Connection: Upgrade\r\n"
@@ -373,7 +388,7 @@ static void m_do_sio_ws_handshake(int fd, const char *req, client_t *c)
     key = get_header_value(req, "Sec-WebSocket-Key");
     m_compute_ws_accept(key, accept);
 
-    dprintf(fd,
+    conn_printf(fd,
         "HTTP/1.1 101 Switching Protocols\r\n"
         "Upgrade: websocket\r\n"
         "Connection: Upgrade\r\n"
@@ -539,22 +554,16 @@ static int client_read_into_buffer(client_t *c, size_t max_size)
             c->rx_cap = new_cap;
         }
 
-        n = recv(c->fd, c->rx_buf + c->rx_len, c->rx_cap - c->rx_len, 0);
+        n = conn_read(c->fd, c->rx_buf + c->rx_len, c->rx_cap - c->rx_len);
         if (n > 0)
         {
             c->rx_len += (size_t)n;
             continue;
         }
-        if (n == 0)
-        {
-            return ERROR; /* cliente cerró */
-        }
-        if (errno == EINTR)
-            continue;
-        if (errno == EAGAIN || errno == EWOULDBLOCK)
-            break;
+        if (n == CONN_AGAIN)
+            break; /* drained: edge-triggered epoll will wake us again */
 
-        return ERROR;
+        return ERROR; /* CONN_CLOSED or CONN_ERROR */
     }
 
     log_msg(LOG_LEVEL_DEBUG, "Finished reading from client fd=%d, total len=%zu\n", c->fd, c->rx_len);
@@ -646,6 +655,48 @@ static int handle_http_buffer(client_t *c)
     return SUCCESS;
 }
 
+/*
+ * Re-arm an edge-triggered client fd. EPOLLOUT is only requested while there is
+ * something to drain (or while the TLS handshake is blocked on writing), so the
+ * loop is not woken for writability it does not care about.
+ */
+static void m_epoll_arm(int fd, bool want_write)
+{
+    struct epoll_event ev;
+
+    memset(&ev, 0, sizeof(ev));
+    ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
+    if (want_write)
+        ev.events |= EPOLLOUT;
+    ev.data.fd = fd;
+
+    if (epoll_ctl(m_epoll_fd, EPOLL_CTL_MOD, fd, &ev) == -1)
+        log_msg(LOG_LEVEL_WARN, "epoll_ctl MOD failed for fd=%d: %s\n", fd, strerror(errno));
+}
+
+/* Drives SSL_accept across as many wakeups as the handshake needs. */
+static int m_handle_tls_handshake(client_t *c)
+{
+    bool want_write = false;
+    int  ret = conn_handshake(c->fd, &want_write);
+
+    if (ret == SUCCESS)
+    {
+        c->state = CS_HTTP;
+        m_epoll_arm(c->fd, conn_has_pending_tx(c->fd));
+        return SUCCESS;
+    }
+
+    if (ret == CONN_AGAIN)
+    {
+        m_epoll_arm(c->fd, want_write);
+        return SUCCESS;
+    }
+
+    REMOVE_CLIENT(c->fd);
+    return SUCCESS;
+}
+
 int m_handle_client_event(int fd)
 {
     client_t *c;
@@ -657,6 +708,9 @@ int m_handle_client_event(int fd)
         close(fd);
         return SUCCESS;
     }
+
+    if (c->state == CS_TLS_HANDSHAKE)
+        return m_handle_tls_handshake(c);
 
     if (c->state == CS_WS_OPEN)
         return m_ws_handle_frame(c);
@@ -710,19 +764,27 @@ int m_handle_new_client(int fd)
         flags = fcntl(client_fd, F_GETFL, 0);
         fcntl(client_fd, F_SETFL, flags | O_NONBLOCK);
 
+        if (conn_register(client_fd) != SUCCESS)
+        {
+            log_msg(LOG_LEVEL_ERROR, "Failed to set up transport for fd=%d\n", client_fd);
+            close(client_fd);
+            continue;
+        }
+
         memset(&ev, 0, sizeof(ev));
-        ev.events = EPOLLIN | EPOLLET;
+        ev.events = EPOLLIN | EPOLLET | EPOLLRDHUP;
         ev.data.fd = client_fd;
         if (epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, client_fd, &ev) == -1)
         {
             perror("epoll_ctl: add client");
+            conn_unregister(client_fd);
             close(client_fd);
             return ERROR;
         }
 
         c = calloc(1, sizeof(*c));
         c->fd = client_fd;
-        c->state = CS_HTTP;
+        c->state = (conn_layer_mode() == CONN_MODE_TLS) ? CS_TLS_HANDSHAKE : CS_HTTP;
         c->rx_cap = 4096;
         c->rx_buf = calloc(1, c->rx_cap);
         c->rx_len = 0;
@@ -738,6 +800,8 @@ int server_select()
     int i;
     int fd;
     int ret;
+    client_t* wc;
+
 
     n = epoll_wait(m_epoll_fd, m_events, MAX_EVENTS, 1000); /* 1s */
     if (n < 0)
@@ -762,6 +826,37 @@ int server_select()
         }
         else
         {
+            /*
+             * Writability first: a queued response must get out before we go
+             * looking for more input on this connection.
+             */
+            if (m_events[i].events & EPOLLOUT)
+            {
+                HASH_FIND_INT(clients, &fd, wc);
+                if (wc && wc->state == CS_TLS_HANDSHAKE)
+                {
+                    m_handle_tls_handshake(wc);
+                    continue;
+                }
+
+                if (wc)
+                {
+                    bool want_write = false;
+
+                    if (conn_flush(fd, &want_write) != SUCCESS)
+                    {
+                        log_msg(LOG_LEVEL_INFO, "Flush failed for fd=%d, dropping\n", fd);
+                        REMOVE_CLIENT(fd);
+                        continue;
+                    }
+
+                    m_epoll_arm(fd, want_write);
+                }
+            }
+
+            if (!(m_events[i].events & (EPOLLIN | EPOLLRDHUP | EPOLLHUP | EPOLLERR)))
+                continue;
+
             ret = m_handle_client_event(fd);
             if (ret == ERROR)
             {
@@ -777,7 +872,7 @@ int server_select()
     return SUCCESS;
 }
 
-int server_init(int port)
+int server_init(int port, bool use_tls, const char *cert_path, const char *key_path)
 {
     struct epoll_event ev;
     struct epoll_event _ev;
@@ -786,6 +881,13 @@ int server_init(int port)
         .it_interval = {25, 0}, /* 25s */
         .it_value    = {25, 0}
     };
+
+    if (conn_layer_init(use_tls ? CONN_MODE_TLS : CONN_MODE_PLAIN,
+                        cert_path, key_path) != SUCCESS)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to initialize the transport layer\n");
+        return ERROR;
+    }
 
     m_sock_server = init_plain_socket(port);
     if (m_sock_server == ERROR)
@@ -816,7 +918,8 @@ int server_init(int port)
     _ev.data.fd = m_timer_fd;
     epoll_ctl(m_epoll_fd, EPOLL_CTL_ADD, m_timer_fd, &_ev);
 
-    log_msg(LOG_LEVEL_BOOT, "HTTP server initialized: fd=%d\n", m_sock_server);
+    log_msg(LOG_LEVEL_BOOT, "%s server initialized: fd=%d port=%d\n",
+            (conn_layer_mode() == CONN_MODE_TLS) ? "HTTPS" : "HTTP", m_sock_server, port);
     return SUCCESS;
 }
 
@@ -843,9 +946,14 @@ void server_cleanup()
     HASH_ITER(hh, clients, c, tmp)
     {
         HASH_DEL(clients, c);
+        conn_unregister(c->fd);
         if (c->sio_sid)
             free(c->sio_sid);
+        if (c->rx_buf)
+            free(c->rx_buf);
         log_msg(LOG_LEVEL_INFO, "Client removed: fd=%d\n", c->fd);
         free(c);
     }
+
+    conn_layer_cleanup();
 }

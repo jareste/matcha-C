@@ -4,6 +4,11 @@ all: docker-up
 	@docker compose up -d --build
 	@echo "Server on http://localhost:8080 — 'make logs' to follow it."
 
+tls: docker-up
+	@SSL_ENABLE=y PORT=8443 HOST_PORT=8443 docker compose up -d --build --force-recreate server
+	@echo "Server on https://localhost:8443 — 'make logs' to follow it."
+	@echo "The cert is self-signed, so curl needs -k and the browser will warn once."
+
 # The idea is that before any other operation, to ensure that the Docker daemon is running.
 # May need some adjustments
 docker-up:

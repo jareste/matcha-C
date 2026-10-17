@@ -5,6 +5,7 @@
 #include "../../db/db_api.h"
 #include "../../db/tables/db_table_pic.h"
 #include "../../log/log_api.h"
+#include "../../server/conn_api.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -252,8 +253,8 @@ void pics_get(void* _ctx, void* user_data)
         return;
     }
 
-    send(ctx->fd, header, header_len, 0);
-    send(ctx->fd, buf, size, 0);
+    conn_write(ctx->fd, header, header_len);
+    conn_write(ctx->fd, buf, size);
 
     free(buf);
     free(pic->file_path);

@@ -1,5 +1,6 @@
 import threading
 import asyncio
+import ssl
 import pickle
 import os
 import json
@@ -10,8 +11,21 @@ import websockets
 import time
 
 # Constants
-BASE_URL = "http://localhost:8080"
+USE_TLS = True
+
+HOST = "localhost"
+PORT = 8443 if USE_TLS else 8080
+BASE_URL = f"{'https' if USE_TLS else 'http'}://{HOST}:{PORT}"
+WS_URL = f"{'wss' if USE_TLS else 'ws'}://{HOST}:{PORT}/ws"
+SIO_URL = BASE_URL
+
+VERIFY_TLS = False
+
 COOKIE_FILE = "cookies.pkl"
+
+if USE_TLS and VERIFY_TLS is False:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 def save_cookies(session: requests.Session):
@@ -27,6 +41,7 @@ def load_cookies(session: requests.Session):
 
 def get_session() -> requests.Session:
     session = requests.Session()
+    session.verify = VERIFY_TLS
     load_cookies(session)
     return session
 
@@ -168,8 +183,15 @@ def do_logout(session):
 
 # WebSocket handler
 async def ws_listener(uri):
+    ssl_ctx = None
+    if uri.startswith("wss://"):
+        ssl_ctx = ssl.create_default_context()
+        if VERIFY_TLS is False:
+            ssl_ctx.check_hostname = False
+            ssl_ctx.verify_mode = ssl.CERT_NONE
+
     try:
-        async with websockets.connect(uri) as ws:
+        async with websockets.connect(uri, ssl=ssl_ctx) as ws:
             print(f"[WS] Connected to {uri}. Press Ctrl+C to quit.")
             while True:
                 msg = await ws.recv()
@@ -179,7 +201,7 @@ async def ws_listener(uri):
 
 
 def ws_mode():
-    uri = input("WebSocket URI (default ws://localhost:8000/ws): ").strip() or f"ws://localhost:8000/ws"
+    uri = input(f"WebSocket URI (default {WS_URL}): ").strip() or WS_URL
     loop = asyncio.new_event_loop()
     t = threading.Thread(target=lambda: loop.run_until_complete(ws_listener(uri)), daemon=True)
     t.start()
@@ -194,7 +216,7 @@ emit_lock = threading.Lock()
 
 def start_sio(uri):
     global sio_client
-    sio_client = socketio.Client()
+    sio_client = socketio.Client(ssl_verify=VERIFY_TLS)
 
     # Load session cookies and prepare Cookie header
     session = get_session()
@@ -238,7 +260,7 @@ def start_sio(uri):
 
 
 def sio_mode():
-    uri = input("Socket.IO server URL (default http://localhost:8080): ").strip() or "http://localhost:8080"
+    uri = input(f"Socket.IO server URL (default {SIO_URL}): ").strip() or SIO_URL
     t = threading.Thread(target=start_sio, args=(uri,), daemon=True)
     t.start()
     print("[SIO] Listener started in background.")

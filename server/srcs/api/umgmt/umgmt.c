@@ -7,6 +7,7 @@
 #include "../../db/db_api.h"
 #include "../../db/tables/db_table_user.h"
 #include "../../log/log_api.h"
+#include "../../server/conn_api.h"
 #include "token.h"
 #include <stdio.h>
 #include <unistd.h>
@@ -183,7 +184,7 @@ void api_umgmt_logout(void* _ctx, void *user_data)
         "http://localhost:8000"
     );
     header_buf[hlen] = '\0';
-    write(ctx->fd, header_buf, hlen);
+    conn_write(ctx->fd, header_buf, hlen);
     log_msg(LOG_LEVEL_DEBUG, "User logged out successfully\n");
 
 }
@@ -320,8 +321,8 @@ void api_umgmt_login(void* _ctx, void *user_data)
     );
     header_buf[hlen] = '\0';
 
-    write(ctx->fd, header_buf, hlen);
-    write(ctx->fd, resp_body, blen);
+    conn_write(ctx->fd, header_buf, hlen);
+    conn_write(ctx->fd, resp_body, blen);
     /* TODO_END */
 
     if (existing_user->token)

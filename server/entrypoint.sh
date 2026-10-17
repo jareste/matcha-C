@@ -23,5 +23,8 @@ update_config DB_PASSWORD "${DB_PASSWORD:-1234qwer}"
 update_config DB_NAME     "${DB_NAME:-matcha_db}"
 update_config PORT        "${PORT:-8080}"
 update_config LOG_LEVEL   "${LOG_LEVEL:-10}"
+update_config SSL_ENABLE  "${SSL_ENABLE:-n}"
+update_config CERT_PATH   "${CERT_PATH:-certs/cert.pem}"
+update_config KEY_PATH    "${KEY_PATH:-certs/key.pem}"
 
 exec "$@"

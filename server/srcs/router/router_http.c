@@ -15,6 +15,7 @@
 #include "router_api.h"
 
 #include "../server/server_api.h"
+#include "../server/conn_api.h"
 
 static route_entry_t* m_routes = NULL;
 
@@ -104,7 +105,7 @@ int router_http_generate_response(int fd, HTTP_response_code_t code, const char*
     {
         snprintf(header, sizeof(header), "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
 
-        send(fd, header, strlen(header), 0);
+        conn_write(fd, header, strlen(header));
     }
     else if (body)
     {
@@ -128,8 +129,8 @@ int router_http_generate_response(int fd, HTTP_response_code_t code, const char*
             return ERROR;
         }
 
-        send(fd, header, header_len, 0);
-        send(fd, body, body_len, 0);
+        conn_write(fd, header, header_len);
+        conn_write(fd, body, body_len);
     }
     else
     {
@@ -154,8 +155,8 @@ int router_http_generate_response(int fd, HTTP_response_code_t code, const char*
             return ERROR;
         }
 
-        send(fd, header, header_len, 0);
-        send(fd, body_buf, body_len, 0);
+        conn_write(fd, header, header_len);
+        conn_write(fd, body_buf, body_len);
     }
 
     log_msg(0, "Response sent to fd=%d with code %d\n", fd, code);
@@ -283,7 +284,7 @@ static void send_cors_preflight(int fd, const char *origin)
         origin
     );
     log_msg(LOG_LEVEL_DEBUG, "CORS preflight response: \n%s\n", buf);
-    write(fd, buf, n);
+    conn_write(fd, buf, n);
 }
 
 int router_handle_http_request(int fd, const char* request, size_t request_len)
