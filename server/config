@@ -4,6 +4,11 @@ LOG_ERASE=y
 
 PORT=8080
 
+# When active, binary must be built with -DUSE_SSL
+SSL_ENABLE=n
+CERT_PATH=certs/cert.pem
+KEY_PATH=certs/key.pem
+
 DB_HOST=localhost
 DB_PORT=5432
 DB_USER=admin

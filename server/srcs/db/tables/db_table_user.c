@@ -1,9 +1,12 @@
 #include "../../../inc/error_codes.h"
 #include "../../../inc/ft_malloc.h"
+#include "../../log/log_api.h"
 #include "../db_gen.h"
 #include "../db_api.h"
 #include "db_table_user.h"
 #include <string.h>
+
+#define EMPTY_STRING(x) ((x) == NULL || (x)[0] == '\0')
 
 const columnDef_t m_users_cols[] =
 {
@@ -22,7 +25,8 @@ const columnDef_t m_users_cols[] =
     { .name = "location_optout", .type = "BOOLEAN",        .is_primary = false, .is_unique = false, .not_null = false, .default_val = "FALSE" },
     { .name = "last_online",   .type = "TIMESTAMP",        .is_primary = false, .is_unique = false, .not_null = false, .default_val = NULL },
     { .name = "created_at",    .type = "TIMESTAMP NOT NULL", .is_primary = false, .is_unique = false, .not_null = true, .default_val = "NOW()" },
-    { .name = "email_verified", .type = "BOOLEAN",         .is_primary = false, .is_unique = false, .not_null = false, .default_val = "FALSE" }
+    { .name = "email_verified", .type = "BOOLEAN",         .is_primary = false, .is_unique = false, .not_null = false, .default_val = "FALSE" },
+    { .name = "token",         .type = "TEXT",             .is_primary = false, .is_unique = false, .not_null = false, .default_val = NULL }
 };
 
 const int m_n_users_cols = sizeof(m_users_cols) / sizeof(m_users_cols[0]);
@@ -73,13 +77,82 @@ int db_tuser_insert_user(DB_ID DB, user_t* u)
         /* location_optout */ bool_buf,
         /* last_online   */ u->last_online,
         /* created_at    */ NULL, /* Allways wanting default */
-        /* email_verified */ NULL /* Allways wanting default */
+        /* email_verified */ NULL, /* Allways wanting default */
+        /* token         */ NULL
     ) != 0)
     {
         /* ERROR. but could be that it already exists */
     }
 
     return SUCCESS;
+}
+
+void db_tuser_free_user(user_t* user)
+{
+    if (!user) return;
+
+    if (user->username)
+        free(user->username);
+    if (user->email)
+        free(user->email);
+    if (user->password_hash)
+        free(user->password_hash);
+    if (user->first_name)
+        free(user->first_name);
+    if (user->last_name)
+        free(user->last_name);
+    if (user->gender)
+        free(user->gender);
+    if (user->orientation)
+        free(user->orientation);
+    if (user->bio)
+        free(user->bio);
+    if (user->last_online)
+        free(user->last_online);
+    if (user->token)
+        free(user->token);
+
+    free(user);
+}
+
+static void m_fill_user_with_PGresult_row(user_t* user, PGresult* res, int row, bool want_token)
+{
+    user->id = atoi(PQgetvalue(res, row, 0));
+    user->username = strdup(PQgetvalue(res, row, 1));
+    user->email = strdup(PQgetvalue(res, row, 2));
+    user->password_hash = strdup(PQgetvalue(res, row, 3));
+    user->first_name = strdup(PQgetvalue(res, row, 4));
+    user->last_name = strdup(PQgetvalue(res, row, 5));
+    user->gender = strdup(PQgetvalue(res, row, 6));
+    user->orientation = strdup(PQgetvalue(res, row, 7));
+    user->bio = strdup(PQgetvalue(res, row, 8));
+    user->fame_rating = atoi(PQgetvalue(res, row, 9));
+    user->gps_lat = atof(PQgetvalue(res, row, 10));
+    user->gps_lon = atof(PQgetvalue(res, row, 11));
+    user->location_optout = (strcmp(PQgetvalue(res, row, 12), "t") == 0);
+    user->last_online = strdup(PQgetvalue(res, row, 13));
+    user->created_at = db_gen_parse_timestamp(PQgetvalue(res, row, 14));
+    user->email_verified = (strcmp(PQgetvalue(res, row, 15), "t") == 0);
+    user->token = want_token ? strdup(PQgetvalue(res, row, 16)) : NULL;
+
+    log_msg(LOG_LEVEL_DEBUG, "db_tuser_fill_user: id=%d, username=%s, email=%s, first_name=%s, last_name=%s\n",
+           user->id, user->username, user->email, user->first_name, user->last_name);
+
+    if (EMPTY_STRING(user->bio))
+    {
+        free(user->bio);
+        user->bio = NULL;
+    }
+    if (EMPTY_STRING(user->last_online))
+    {
+        free(user->last_online);
+        user->last_online = NULL;
+    }
+    if (EMPTY_STRING(user->token))
+    {
+        free(user->token);
+        user->token = NULL;
+    }
 }
 
 user_t_array* db_tuser_select_all_users(DB_ID DB)
@@ -130,6 +203,7 @@ user_t_array* db_tuser_select_all_users(DB_ID DB)
         users[i]->last_online = PQgetvalue(all, i, 13);
         users[i]->created_at = db_gen_parse_timestamp(PQgetvalue(all, i, 14));
         users[i]->email_verified = (strcmp(PQgetvalue(all, i, 15), "t") == 0);
+        users[i]->token = NULL;
     }
     
     return result;
@@ -159,22 +233,56 @@ int db_select_user_by_username(DB_ID DB, const char* username, user_t** user)
     if (r2 && PQntuples(r2) == 1)
     {
         *user = calloc(sizeof(user_t), 1);
-        (*user)->id = atoi(PQgetvalue(r2, 0, 0));
-        (*user)->username = PQgetvalue(r2, 0, 1);
-        (*user)->email = PQgetvalue(r2, 0, 2);
-        (*user)->password_hash = PQgetvalue(r2, 0, 3);
-        (*user)->first_name = PQgetvalue(r2, 0, 4);
-        (*user)->last_name = PQgetvalue(r2, 0, 5);
-        (*user)->gender = PQgetvalue(r2, 0, 6);
-        (*user)->orientation = PQgetvalue(r2, 0, 7);
-        (*user)->bio = PQgetvalue(r2, 0, 8);
-        (*user)->fame_rating = atoi(PQgetvalue(r2, 0, 9));
-        (*user)->gps_lat = atof(PQgetvalue(r2, 0, 10));
-        (*user)->gps_lon = atof(PQgetvalue(r2, 0, 11));
-        (*user)->location_optout = (strcmp(PQgetvalue(r2, 0, 12), "t") == 0);
-        (*user)->last_online = PQgetvalue(r2, 0, 13);
-        (*user)->created_at = db_gen_parse_timestamp(PQgetvalue(r2, 0, 14));
-        (*user)->email_verified = (strcmp(PQgetvalue(r2, 0, 15), "t") == 0);
+        m_fill_user_with_PGresult_row(*user, r2, 0, true);
+    }
+
+    if (r2) db_clear_result(r2);
+    return SUCCESS;
+}
+
+int db_select_user_by_email(DB_ID DB, const char* email, user_t** user)
+{
+    PGresult* r2;
+    const char *sql = "SELECT * FROM users WHERE email = $1;";
+    const char *params[1] = { email };
+
+    r2 = db_query(DB, sql, 1, params);
+    if (r2 && PQntuples(r2) == 1)
+    {
+        *user = calloc(sizeof(user_t), 1);
+        m_fill_user_with_PGresult_row(*user, r2, 0, true);
+    }
+    else
+    {
+        *user = NULL;
+        db_clear_result(r2);
+        return ERROR;
+    }
+
+    if (r2) db_clear_result(r2);
+    return SUCCESS;
+}
+
+int db_select_user_by_id(DB_ID DB, int id, user_t** user)
+{
+    char id_buf[16];
+    PGresult* r2;
+    const char *sql = "SELECT * FROM users WHERE id = $1;";
+    
+    snprintf(id_buf, sizeof(id_buf), "%d", id);
+    const char *params[1] = { id_buf };
+
+    r2 = db_query(DB, sql, 1, params);
+    if (r2 && PQntuples(r2) == 1)
+    {
+        *user = calloc(sizeof(user_t), 1);
+        m_fill_user_with_PGresult_row(*user, r2, 0, true);
+    }
+    else
+    {
+        *user = NULL;
+        db_clear_result(r2);
+        return ERROR;
     }
 
     if (r2) db_clear_result(r2);
@@ -243,7 +351,8 @@ int db_tuser_update_user(DB_ID DB, const user_t *u)
         /* location_optout */ bool_buf,
         /* last_online   */ u->last_online,
         /* created_at    */ NULL,
-        /* email_verified */ u->email_verified ? "TRUE" : "FALSE"
+        /* email_verified */ u->email_verified ? "TRUE" : "FALSE",
+        /* token         */ u->token
     );
 
     return rc;

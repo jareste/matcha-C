@@ -10,6 +10,7 @@ typedef struct
 
 typedef struct
 {
+    bool SSL_ENABLE;
     char* CERT_PATH;
     char* KEY_PATH;
     int PORT;

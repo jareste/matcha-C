@@ -1,7 +1,8 @@
 include ../../config.mk
 
 NAME = libserver.a
-SRC = server.c 
+SRC = server.c \
+	  conn.c
 
 OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 INCLUDES = -I../../inc -I../log

@@ -1,0 +1,356 @@
+#include "api_umgmt.h"
+#include "../../../third_party/cJSON/cJSON.h"
+#include "../../../inc/error_codes.h"
+#include "../../../inc/ft_malloc.h"
+#include "../../router/router_api.h"
+#include "../../db/db_gen.h"
+#include "../../db/db_api.h"
+#include "../../db/tables/db_table_user.h"
+#include "../../log/log_api.h"
+#include "../../server/conn_api.h"
+#include "token.h"
+#include <stdio.h>
+#include <unistd.h>
+
+DB_ID get_db_id();
+
+void api_umgmt_register(void* _ctx, void *user_data)
+{
+    http_request_t request;
+    char* password;
+    user_t new_user = {0};
+    user_t *existing_user = NULL;
+    cJSON *json = NULL;
+    cJSON *username_item = NULL;
+    cJSON *email_item = NULL;
+    cJSON *password_item = NULL;
+    cJSON *first_name_item = NULL;
+    cJSON *last_name_item = NULL;
+    int ret;
+    http_request_ctx_t* ctx;
+
+    ctx = (http_request_ctx_t*)_ctx;
+
+    (void)user_data;
+
+    if (router_parse_http_request(ctx->request, ctx->request_len, &request) == ERROR)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Bad Request\"}", NULL);
+        goto cleanup;
+    }
+
+    if (strcmp(request.method, "POST") != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_405_METHOD_NOT_ALLOWED,
+                                      "{\"error\":\"Method Not Allowed\"}", NULL);
+        goto cleanup;
+    }
+
+    log_msg(LOG_LEVEL_DEBUG, "#################Body#####################:\n%s\n", request.body);
+    log_msg(LOG_LEVEL_DEBUG, "#########################################\n");
+    /* Parse request body for user registration data */
+    json = cJSON_Parse(request.body);
+    if (!json)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Register failed to parse JSON body\n");
+        log_msg(LOG_LEVEL_DEBUG, "Body was:\n%s\n", request.body);
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Invalid JSON\"}", NULL);
+        goto cleanup;
+    }
+    /* Fill user */
+    username_item = (cJSON_GetObjectItemCaseSensitive(json, "username"));
+    if (!username_item || !cJSON_IsString(username_item) || (username_item->valuestring == NULL))
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Username is required\"}", NULL);
+        goto cleanup;
+    }
+    email_item = (cJSON_GetObjectItemCaseSensitive(json, "email"));
+    if (!email_item || !cJSON_IsString(email_item) || (email_item->valuestring == NULL))
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Email is required\"}", NULL);
+        goto cleanup;
+    }
+    password_item = (cJSON_GetObjectItemCaseSensitive(json, "password"));
+    if (!password_item || !cJSON_IsString(password_item) || (password_item->valuestring == NULL))
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Password is required\"}", NULL);
+        goto cleanup;
+    }
+    first_name_item = (cJSON_GetObjectItemCaseSensitive(json, "first_name"));
+    if (!first_name_item || !cJSON_IsString(first_name_item) || (first_name_item->valuestring == NULL))
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"First name is required\"}", NULL);
+        goto cleanup;
+    }
+    last_name_item = (cJSON_GetObjectItemCaseSensitive(json, "last_name"));
+    if (!last_name_item || !cJSON_IsString(last_name_item) || (last_name_item->valuestring == NULL))
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Last name is required\"}", NULL);
+        goto cleanup;
+    }   
+    new_user.username = username_item->valuestring;
+    new_user.email = email_item->valuestring;
+    password = password_item->valuestring;
+    new_user.first_name = first_name_item->valuestring;
+    new_user.last_name = last_name_item->valuestring;
+
+    new_user.gender = "undefined";
+    new_user.orientation = "undefined";
+    new_user.password_hash = password; /* TODO hash password */
+    new_user.bio = NULL;
+    new_user.fame_rating = 0;
+    new_user.gps_lat = 0.0;
+    new_user.gps_lon = 0.0;
+    new_user.location_optout = false;
+    new_user.last_online = NULL;
+    new_user.created_at = time(NULL);
+    new_user.email_verified = false;
+
+    if (!new_user.username || !new_user.email || !password)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Missing required fields\"}", NULL);
+        goto cleanup;
+    }
+
+    db_select_user_by_username(get_db_id(), new_user.username, &existing_user);
+    if (existing_user)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Username already exists\"}", NULL);
+        goto cleanup;
+    }
+
+    db_select_user_by_email(get_db_id(), new_user.email, &existing_user);
+    if (existing_user)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Email already exists\"}", NULL);
+        goto cleanup;
+    }
+
+    ret = db_tuser_insert_user(get_db_id(), &new_user);
+    if (ret == ERROR)
+    {
+        router_http_generate_response(ctx->fd, CODE_500_INTERNAL_SERVER_ERROR,
+                                      "{\"error\":\"Failed to register user\"}", NULL);
+        goto cleanup;
+    }
+
+    router_http_generate_response(ctx->fd, CODE_201_CREATED,
+        "{\"success\":true, \"message\":\"Registration successful\"}", NULL);
+        
+cleanup:
+    if (json)    
+        cJSON_Delete(json);
+
+    if (existing_user)
+        db_tuser_free_user(existing_user);
+
+    free_http_request(&request);
+}
+
+void api_umgmt_logout(void* _ctx, void *user_data)
+{
+    http_request_ctx_t* ctx;
+
+    (void)user_data;
+
+    ctx = (http_request_ctx_t*)_ctx;
+
+    if (strcmp(ctx->parsed_request.method, "POST") != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_405_METHOD_NOT_ALLOWED,
+                                      "{\"error\":\"Method Not Allowed\"}", NULL);
+        return;
+    }
+
+    char header_buf[2048];
+    int hlen = snprintf(header_buf, sizeof(header_buf),
+        "HTTP/1.1 200 OK\r\n"
+        "Set-Cookie: token=deleted; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT\r\n"
+        "Access-Control-Allow-Origin: %s\r\n"
+        "Access-Control-Allow-Credentials: true\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: 0\r\n"
+        "\r\n",
+        "http://localhost:8000"
+    );
+    header_buf[hlen] = '\0';
+    conn_write(ctx->fd, header_buf, hlen);
+    log_msg(LOG_LEVEL_DEBUG, "User logged out successfully\n");
+
+}
+
+void api_umgmt_validate(void* _ctx, void *user_data)
+{
+    http_request_ctx_t* ctx;
+    char response[256];
+
+    (void)user_data;
+    ctx = (http_request_ctx_t*)_ctx;
+
+    if (strcmp(ctx->parsed_request.method, "GET") != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_405_METHOD_NOT_ALLOWED,
+                                      "{\"error\":\"Method Not Allowed\"}", NULL);
+        return;
+    }
+
+    snprintf(response, sizeof(response),
+             "{\"success\":true, \"message\":\"User is valid\", \"username\":\"%s\"}",
+             ctx->username ? ctx->username : "unknown");
+    router_http_generate_response(ctx->fd, CODE_200_OK,
+                                  response, NULL);
+
+
+    return;
+}
+
+void api_umgmt_login(void* _ctx, void *user_data)
+{
+    http_request_ctx_t* ctx = (http_request_ctx_t*)_ctx;
+    user_t* existing_user = NULL;
+    cJSON* json = NULL;
+    cJSON* email_item = NULL;
+    cJSON* password_item = NULL;
+    int ret;
+
+    (void)user_data;
+
+    if (strcmp(ctx->parsed_request.method, "POST") != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_405_METHOD_NOT_ALLOWED,
+                                      "{\"error\":\"Method Not Allowed\"}", NULL);
+        goto cleanup;
+    }
+
+    log_msg(LOG_LEVEL_DEBUG, "#################Body#####################:\n%s\n", ctx->parsed_request.body);
+    log_msg(LOG_LEVEL_DEBUG, "#########################################\n");
+
+    json = cJSON_Parse(ctx->parsed_request.body);
+    if (!json)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Login failed to parse JSON body\n");
+        log_msg(LOG_LEVEL_DEBUG, "Body was:\n%s\n", ctx->parsed_request.body);
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Invalid JSON\"}", NULL);
+        goto cleanup;
+    }
+
+    log_msg(LOG_LEVEL_DEBUG, "request body: %s\n", ctx->parsed_request.body);
+    email_item = cJSON_GetObjectItemCaseSensitive(json, "email");
+    if (!email_item || !cJSON_IsString(email_item) || (email_item->valuestring == NULL))
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Email is required\"}", NULL);
+        goto cleanup;
+    }
+
+    db_select_user_by_email(get_db_id(), email_item->valuestring, &existing_user);
+    if (!existing_user)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Email not found\"}", NULL);
+        goto cleanup;
+    }
+    password_item = cJSON_GetObjectItemCaseSensitive(json, "password");
+    if (!password_item || !cJSON_IsString(password_item) || (password_item->valuestring == NULL))
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Password is required\"}", NULL);
+        goto cleanup;
+    }
+    if (strcmp(existing_user->password_hash, password_item->valuestring) != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\":\"Invalid credentials\"}", NULL);
+        goto cleanup;
+    }
+
+    /* TODO not sending emails yet */
+    // if (!existing_user->email_verified)
+    // {
+    //     router_http_generate_response(ctx->fd, CODE_403_FORBIDDEN,
+    //                                   "{\"error\":\"Email not verified\"}");
+    //     goto cleanup;
+    // }
+
+    if (strcmp(existing_user->password_hash, password_item->valuestring) != 0)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                        "{\"error\":\"Invalid credentials\"}", NULL);
+        goto cleanup;
+    }
+
+    /* TODO make it prettier */
+    const char *resp_body = "{\"success\":true, \"message\":\"Login successful\"}";
+    size_t blen = strlen(resp_body);
+    char token[1024];
+    char* uname = strdup(existing_user->username);
+    char* email = strdup(existing_user->email);
+    int uid = existing_user->id;
+    ret = token_generate(uname, email, uid, token, sizeof(token));
+    if (ret != SUCCESS)
+    {
+        router_http_generate_response(ctx->fd, CODE_500_INTERNAL_SERVER_ERROR,
+                                      "{\"error\":\"Failed to generate token\"}", NULL);
+        goto cleanup;
+    }
+    free(uname);
+    free(email);
+    log_msg(LOG_LEVEL_DEBUG, "Generating token for user %s\n", existing_user->username);
+
+    char header_buf[2048];
+    int hlen = snprintf(header_buf, sizeof(header_buf),
+        "HTTP/1.1 200 OK\r\n"
+        "Set-Cookie: token=%s; HttpOnly; Path=/; SameSite=Strict\r\n"
+        "Access-Control-Allow-Origin: %s\r\n"
+        "Access-Control-Allow-Credentials: true\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: %zu\r\n"
+        "\r\n",
+        token, "http://localhost:8000", blen
+    );
+    header_buf[hlen] = '\0';
+
+    conn_write(ctx->fd, header_buf, hlen);
+    conn_write(ctx->fd, resp_body, blen);
+    /* TODO_END */
+
+    if (existing_user->token)
+        free(existing_user->token);
+
+    existing_user->token = strdup(token);
+    if (db_tuser_update_user(get_db_id(), existing_user) == ERROR)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Failed to update user token in database\n");
+    }
+    log_msg(LOG_LEVEL_DEBUG, "User %s logged in successfully with token: \n'%s'\n", existing_user->username, existing_user->token);
+
+    // router_http_generate_response(ctx->fd, CODE_200_OK,
+    //     "{\"success\":true, \"message\":\"Login successful\"}", NULL);
+
+cleanup:
+    if (json)
+        cJSON_Delete(json);
+
+    if (existing_user)
+        db_tuser_free_user(existing_user);    
+
+}
+
+void api_umgmt_init()
+{
+    router_http_add("/api/register", api_umgmt_register, NULL, FLAG_NONE);
+    router_http_add("/api/login", api_umgmt_login, NULL, FLAG_NONE);
+    router_http_add("/api/validate", api_umgmt_validate, NULL, AUTH_REQUIRED);
+    router_http_add("/api/logout", api_umgmt_logout, NULL, AUTH_REQUIRED);
+}

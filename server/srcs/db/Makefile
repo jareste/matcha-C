@@ -16,7 +16,7 @@ OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs
 OBJ_DIR = objs
 
-CFLAGS += -I../../inc -I/usr/include/postgresql -I$(HOME)/postgresql/include
+CFLAGS += -I../../inc -I/usr/include/postgresql -I$(HOME)/postgresql/include -DIAM_DB_MODULE
 
 all: $(NAME)
 

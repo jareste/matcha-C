@@ -1,9 +1,11 @@
 #ifndef DB_GENERIC_H
 #define DB_GENERIC_H
 
+#ifdef IAM_DB_MODULE
+#include <libpq-fe.h>   // for PGresult
+#endif
 #include <stdbool.h>
 #include <stdarg.h>
-#include <libpq-fe.h>   // for PGresult
 #include "db_api.h"         // for DB_ID, db_execute, db_query, db_clear_result
 
 /*
@@ -56,12 +58,13 @@ int db_gen_create_table(DB_ID db, const tableSchema_t *schema);
  */
 int db_gen_insert(DB_ID db, const tableSchema_t *schema, ...);
 
+#ifdef IAM_DB_MODULE
 /*
  *    SELECT * FROM tableName. Returns a PGresult* (must call db_clear_result on it)
  *    or NULL on error.
  */
 PGresult *db_gen_select_all_from(DB_ID db, const tableSchema_t *schema);
-
+#endif /* IAM_DB_MODULE */
 /*
  *    DELETE FROM tableName WHERE <primary_key> = $1
  *    Find the column marked as is_primary. You must pass exactly one
