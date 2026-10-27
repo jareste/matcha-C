@@ -378,6 +378,7 @@ static void m_do_sio_ws_handshake(int fd, const char *req, client_t *c)
     if (validate_cookies(fd, req, &username, &email, &uid, origin) == ERROR)
     {
         log_msg(LOG_LEVEL_ERROR, "Invalid token for fd=%d\n", fd);
+        free(origin);
         if (username) free(username);
         if (email) free(email);
         c->state = CS_HTTP;
@@ -407,6 +408,7 @@ static void m_do_sio_ws_handshake(int fd, const char *req, client_t *c)
     if (m_new_sio_client_handler)
         m_new_sio_client_handler(fd, uid);
 
+    free(origin);
     if (username) free(username);
     if (email) free(email);
 
@@ -531,9 +533,18 @@ int init_plain_socket(int port)
     return sockfd;
 }
 
-static int client_read_into_buffer(client_t *c, size_t max_size)
+/*
+ * Fills c->rx_buf until the transport has nothing more right now. Returns ERROR
+ * only for a local failure (allocation); the peer going away is reported
+ * through *peer_closed, because bytes already in the buffer may well be a
+ * complete request that still has to be answered.
+ */
+static int client_read_into_buffer(client_t *c, size_t max_size, bool *peer_closed)
 {
     ssize_t n;
+
+    if (peer_closed)
+        *peer_closed = false;
 
     log_msg(LOG_LEVEL_DEBUG, "Reading from client fd=%d into buffer (current len=%zu, cap=%zu)\n", c->fd, c->rx_len, c->rx_cap);
     for (;;)
@@ -563,7 +574,15 @@ static int client_read_into_buffer(client_t *c, size_t max_size)
         if (n == CONN_AGAIN)
             break; /* drained: edge-triggered epoll will wake us again */
 
-        return ERROR; /* CONN_CLOSED or CONN_ERROR */
+        /*
+         * CONN_CLOSED or CONN_ERROR. Stop reading, but do not throw the buffer
+         * away: with Connection: close a client can send its request and shut
+         * down its write side in the same breath, and discarding here dropped
+         * the request on the floor.
+         */
+        if (peer_closed)
+            *peer_closed = true;
+        break;
     }
 
     log_msg(LOG_LEVEL_DEBUG, "Finished reading from client fd=%d, total len=%zu\n", c->fd, c->rx_len);
@@ -674,7 +693,6 @@ static void m_epoll_arm(int fd, bool want_write)
         log_msg(LOG_LEVEL_WARN, "epoll_ctl MOD failed for fd=%d: %s\n", fd, strerror(errno));
 }
 
-/* Drives SSL_accept across as many wakeups as the handshake needs. */
 static int m_handle_tls_handshake(client_t *c)
 {
     bool want_write = false;
@@ -690,16 +708,17 @@ static int m_handle_tls_handshake(client_t *c)
     if (ret == CONN_AGAIN)
     {
         m_epoll_arm(c->fd, want_write);
-        return SUCCESS;
+        return CONN_AGAIN;
     }
 
     REMOVE_CLIENT(c->fd);
-    return SUCCESS;
+    return ERROR;
 }
 
 int m_handle_client_event(int fd)
 {
     client_t *c;
+    bool peer_closed = false;
 
     HASH_FIND_INT(clients, &fd, c);
     if (!c)
@@ -710,7 +729,21 @@ int m_handle_client_event(int fd)
     }
 
     if (c->state == CS_TLS_HANDSHAKE)
-        return m_handle_tls_handshake(c);
+    {
+        int hs = m_handle_tls_handshake(c);
+
+        if (hs != SUCCESS)
+            return SUCCESS; /* still negotiating, or the client is gone */
+
+        /*
+         * Do NOT wait for another EPOLLIN here. The client can pipeline its
+         * first request into the same burst as the handshake records, in which
+         * case SSL_accept has already drained the socket and the request is
+         * sitting in OpenSSL's buffer -- edge-triggered epoll will never report
+         * it, and the connection would hang until the peer gave up. Fall
+         * through and drain the transport now.
+         */
+    }
 
     if (c->state == CS_WS_OPEN)
         return m_ws_handle_frame(c);
@@ -719,10 +752,10 @@ int m_handle_client_event(int fd)
         return m_sio_ws_handle_frame(c);
 
     log_msg(LOG_LEVEL_DEBUG, "Handling client event for fd=%d in HTTP state\n", fd);
-    if (client_read_into_buffer(c, 4 * 1024 * 1024) != SUCCESS)
+    if (client_read_into_buffer(c, 4 * 1024 * 1024, &peer_closed) != SUCCESS)
     {
         REMOVE_CLIENT(fd);
-        log_msg(LOG_LEVEL_INFO, "Client disconnected or error while reading: fd=%d\n", fd);
+        log_msg(LOG_LEVEL_INFO, "Read failure on fd=%d\n", fd);
         return SUCCESS;
     }
     log_msg(LOG_LEVEL_DEBUG, "Read %zu bytes from client fd=%d into buffer\n", c->rx_len, fd);
@@ -731,6 +764,12 @@ int m_handle_client_event(int fd)
     {
         REMOVE_CLIENT(fd);
         return ERROR;
+    }
+
+    if (peer_closed)
+    {
+        log_msg(LOG_LEVEL_INFO, "Client closed the connection: fd=%d\n", fd);
+        REMOVE_CLIENT(fd);
     }
 
     return SUCCESS;
@@ -835,7 +874,8 @@ int server_select()
                 HASH_FIND_INT(clients, &fd, wc);
                 if (wc && wc->state == CS_TLS_HANDSHAKE)
                 {
-                    m_handle_tls_handshake(wc);
+                    if (m_handle_tls_handshake(wc) == SUCCESS)
+                        m_handle_client_event(fd); /* may carry a pipelined request */
                     continue;
                 }
 

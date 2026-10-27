@@ -4,6 +4,7 @@ NAME = libapi.a
 SRC =	api.c \
 		umgmt/umgmt.c \
 		umgmt/token.c \
+		umgmt/password.c \
 		chat/chat.c \
 		profile/profile.c \
 		tags/tags.c \

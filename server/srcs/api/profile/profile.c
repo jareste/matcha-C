@@ -217,6 +217,7 @@ void profile_get_user(void* _ctx, void *user_data)
 
 void api_profile_init()
 {
-    router_http_add("/api/profile/get", profile_get_user, NULL, AUTH_REQUIRED);
-    router_http_add("/api/profile/update", profile_update_user, NULL, AUTH_REQUIRED);
+    router_http_add("/api/profile/get", profile_get_user, NULL, AUTH_REQUIRED | M_GET);
+    router_http_add("/api/profile/update", profile_update_user, NULL,
+                    AUTH_REQUIRED | M_POST | M_PATCH | BODY_JSON);
 }

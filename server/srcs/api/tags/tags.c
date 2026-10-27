@@ -16,7 +16,6 @@ DB_ID get_db_id();
 void tags_insert(void* _ctx, void *user_data)
 {
     http_request_ctx_t* ctx = (http_request_ctx_t*)_ctx;
-    cJSON* json_body;
     cJSON* json_tags;
     cJSON* tag_token;
     cJSON* json_response;
@@ -27,26 +26,8 @@ void tags_insert(void* _ctx, void *user_data)
 
     (void)user_data;
 
-    ASSERT(ctx->parsed_request.body);
-
-    log_msg(LOG_LEVEL_DEBUG, "Tags insert body [%s]\n", ctx->parsed_request.body);
-
-    json_body = cJSON_Parse(ctx->parsed_request.body);
-    if (!json_body)
-    {
-        log_msg(LOG_LEVEL_ERROR, "Failed to parse JSON body\n");
-        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST, "{\"error\": \"Invalid JSON body\"}", NULL);
+    if (!ctx_require_array(ctx, "tags", &json_tags))
         return;
-    }
-
-    json_tags = cJSON_GetObjectItemCaseSensitive(json_body, "tags");
-    if (!cJSON_IsArray(json_tags))
-    {
-        log_msg(LOG_LEVEL_ERROR, "Invalid or missing 'tags' in request body\n");
-        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST, "{\"error\": \"Invalid or missing 'tags' in request body\"}", NULL);
-        cJSON_Delete(json_body);
-        return;
-    }
 
     log_msg(LOG_LEVEL_DEBUG, "Extracted tags from body\n");
 
@@ -79,13 +60,11 @@ void tags_insert(void* _ctx, void *user_data)
     cJSON_Delete(json_response);
 
     log_msg(LOG_LEVEL_DEBUG, "Sent response:\n%s\n", response);
-    router_http_generate_response(ctx->fd, CODE_200_OK, response, NULL);
+    router_http_generate_response(ctx->fd, CODE_200_OK, response, ctx->origin);
     free(response);
-
-    cJSON_Delete(json_body);
 }
 
 void api_tags_init()
 {
-    router_http_add("/api/tags/insert", tags_insert, NULL, AUTH_REQUIRED);
+    router_http_add("/api/tags/insert", tags_insert, NULL, AUTH_REQUIRED | M_POST | BODY_JSON);
 }

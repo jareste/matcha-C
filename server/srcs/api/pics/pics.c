@@ -263,6 +263,7 @@ void pics_get(void* _ctx, void* user_data)
 
 void api_pics_init()
 {
-    router_http_add("/api/pics/insert", pics_insert, NULL, AUTH_REQUIRED);
-    router_http_add("/api/pics/get", pics_get, NULL, AUTH_REQUIRED);
+    /* Upload is multipart, not JSON: require a body but do not parse it. */
+    router_http_add("/api/pics/insert", pics_insert, NULL, AUTH_REQUIRED | M_POST | BODY_REQUIRED);
+    router_http_add("/api/pics/get", pics_get, NULL, AUTH_REQUIRED | M_GET | QUERY_NEEDED);
 }

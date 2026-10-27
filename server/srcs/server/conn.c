@@ -156,6 +156,10 @@ int conn_layer_init(conn_mode_t mode, const char *cert_path, const char *key_pat
 
     SSL_CTX_set_min_proto_version(m_ssl_ctx, TLS1_2_VERSION);
     SSL_CTX_set_options(m_ssl_ctx, SSL_OP_NO_COMPRESSION);
+#ifdef SSL_OP_IGNORE_UNEXPECTED_EOF
+    /* Report a missing close_notify as EOF, the way OpenSSL 1.1.1 did. */
+    SSL_CTX_set_options(m_ssl_ctx, SSL_OP_IGNORE_UNEXPECTED_EOF);
+#endif
 
     /*
      * Without this, a partial SSL_write would have to be retried with the exact
@@ -380,6 +384,21 @@ ssize_t conn_read(int fd, void *buf, size_t len)
                 return CONN_AGAIN;
             /* errno == 0 here means the peer vanished without close_notify. */
             return (errno == 0) ? CONN_CLOSED : CONN_ERROR;
+        case SSL_ERROR_SSL:
+        {
+            unsigned long reason = ERR_GET_REASON(ERR_peek_last_error());
+
+            if (reason == SSL_R_UNEXPECTED_EOF_WHILE_READING ||
+                reason == SSL_R_SHUTDOWN_WHILE_IN_INIT)
+            {
+                ERR_clear_error();
+                return CONN_CLOSED;
+            }
+
+            log_msg(LOG_LEVEL_DEBUG, "conn: SSL_read protocol error on fd=%d: %s\n",
+                    fd, ERR_error_string(ERR_get_error(), NULL));
+            return CONN_ERROR;
+        }
         default:
             log_msg(LOG_LEVEL_DEBUG, "conn: SSL_read error on fd=%d: %s\n",
                     fd, ERR_error_string(ERR_get_error(), NULL));

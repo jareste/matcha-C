@@ -38,26 +38,23 @@ void chat_get_u_chat(void* req_ctx, void* user_data)
     message_t_array* messages;
     size_t i;
     char* response;
-    char* id_str;
     char timebuf[26];
     int user_id;
 
     (void)user_data;
 
-    ASSERT(ctx->query);
+    if (!ctx->query)
+    {
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST,
+                                      "{\"error\": \"Missing query parameters\"}", ctx->origin);
+        return;
+    }
 
     log_msg(LOG_LEVEL_DEBUG, "chat_get_u_chat query: '%s'\n", ctx->query);
-    id_str = strstr(ctx->query, "id=");
-    if (id_str)
-    {
-        id_str += 3;
-        user_id = atoi(id_str);
-        log_msg(LOG_LEVEL_DEBUG, "Extracted user ID: %d\n", user_id);
-    }
-    else
+    if (!ctx_query_int(ctx, "id", &user_id))
     {
         log_msg(LOG_LEVEL_ERROR, "Query parameter 'id' not found\n");
-        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST, "{\"error\": \"Missing 'id' parameter\"}", NULL);
+        router_http_generate_response(ctx->fd, CODE_400_BAD_REQUEST, "{\"error\": \"Missing 'id' parameter\"}", ctx->origin);
         return;
     }
 
@@ -127,8 +124,8 @@ void chat_send_msg(void* req_ctx, void* user_data)
 
 void chat_init()
 {
-    router_http_add("/api/chat", chat_get_u_chats, NULL, AUTH_REQUIRED);
-    router_http_add("/api/chat/messages", chat_get_u_chat, NULL, AUTH_REQUIRED | QUERY_NEEDED);
+    router_http_add("/api/chat", chat_get_u_chats, NULL, AUTH_REQUIRED | M_GET);
+    router_http_add("/api/chat/messages", chat_get_u_chat, NULL, AUTH_REQUIRED | M_GET | QUERY_NEEDED);
     router_sio_add("send", chat_send_msg, NULL, FLAG_NONE);
     
     log_msg(LOG_LEVEL_BOOT, "Chat API initialized\n");

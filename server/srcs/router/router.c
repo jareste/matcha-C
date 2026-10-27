@@ -61,6 +61,11 @@ route_entry_t* router_find(route_entry_t** routes_hm, const char* path)
     return entry;
 }
 
+/*
+ * Note: `origin` is borrowed, not owned. This used to free() it on every path,
+ * which left the caller holding a dangling pointer the moment it wanted the
+ * origin for its own response.
+ */
 int router_validate_token_for_server(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin)
 {
     int rc;
@@ -77,7 +82,6 @@ int router_validate_token_for_server(int fd, const char* request, char** out_use
     {
         log_msg(LOG_LEVEL_ERROR, "No cookies in request from fd=%d\n", fd);
         router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
-        free(origin);
         return ERROR;
     }
     auth_cookie = strstr(cookies, "token=");
@@ -85,11 +89,9 @@ int router_validate_token_for_server(int fd, const char* request, char** out_use
     {
         free(cookies);
         rc = router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
-        free(origin);
         log_msg(LOG_LEVEL_ERROR, "No token in request from fd=%d\n", fd);
         return ERROR;
     }
-    free(origin);
 
     rc = token_validate(auth_cookie + 6, out_username, out_email, out_uid);
     if (rc != SUCCESS)
