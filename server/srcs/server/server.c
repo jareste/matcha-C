@@ -26,6 +26,10 @@
 /* defines */
 #define SERVER_KEY "SOME_KEY"
 #define MAX_LOGIN_ROLES 3
+/* Largest WebSocket payload accepted from a client, and the rx cap for a
+ * websocket connection (header overhead included). */
+#define WS_MAX_PAYLOAD (1 * 1024 * 1024)
+#define WS_RX_MAX      (WS_MAX_PAYLOAD + 4096)
 
 /*
 // #define REMOVE_CLIENT(fd)                                  \
@@ -93,6 +97,14 @@ typedef struct
 
     UT_hash_handle hh;
 } client_t;
+
+typedef struct
+{
+    uint8_t opcode;
+    bool    fin;
+    char*   payload;     /* NUL-terminated copy; NULL when payload_len is 0 */
+    size_t  payload_len;
+} ws_frame_t;
 
 static client_t *clients = NULL;
 
@@ -162,152 +174,213 @@ void server_set_request_handlers(on_request http_handler, on_request ws_handler,
 
 static int m_send_ws_frame(int fd, uint8_t opcode, const void *data, size_t len, bool is_text)
 {
-    uint8_t hdr[2] = { (is_text ? 0x81 : 0x80) | opcode, (uint8_t)len };
+    uint8_t hdr[10];
+    size_t  hdr_len;
 
-    return conn_writev2(fd, hdr, 2, data, len) >= 0 ? SUCCESS : ERROR;
+    hdr[0] = (uint8_t)((is_text ? 0x81 : 0x80) | opcode);
+
+    if (len <= 125)
+    {
+        hdr[1] = (uint8_t)len;
+        hdr_len = 2;
+    }
+    else if (len <= 0xFFFF)
+    {
+        hdr[1] = 126;
+        hdr[2] = (uint8_t)(len >> 8);
+        hdr[3] = (uint8_t)(len & 0xFF);
+        hdr_len = 4;
+    }
+    else
+    {
+        int i;
+
+        hdr[1] = 127;
+        for (i = 0; i < 8; i++)
+            hdr[2 + i] = (uint8_t)((uint64_t)len >> (56 - 8 * i));
+        hdr_len = 10;
+    }
+
+    /* Server-to-client frames are never masked. */
+    return conn_writev2(fd, hdr, hdr_len, data, len) >= 0 ? SUCCESS : ERROR;
 }
 
-static int m_ws_parse_frame(int fd, uint8_t *hdr, uint8_t **payload, uint64_t *len, uint8_t *mask, bool *masked)
+static int m_ws_take_frame(const uint8_t *buf, size_t len, ws_frame_t *out, size_t *consumed)
 {
-    uint64_t i;
-    uint16_t ext16;
-    uint64_t ext64;
-    int n;
+    const uint8_t* mask;
+    uint64_t plen;
+    size_t   off = 2;
+    size_t   i;
+    bool     masked;
 
-    n = conn_read_exact(fd, hdr, 2);
-    if (n != SUCCESS)
+    if (len < 2)
+        return 0;
+
+    out->fin    = (buf[0] & 0x80) != 0;
+    out->opcode = buf[0] & 0x0F;
+    masked      = (buf[1] & 0x80) != 0;
+    plen        = buf[1] & 0x7F;
+
+    if (plen == 126)
     {
-        log_msg(LOG_LEVEL_ERROR, "Failed to read WebSocket frame header from fd=%d\n", fd);
-        *payload = NULL;
-        *len = 0;
-        return ERROR;
+        if (len < off + 2)
+            return 0;
+        plen = ((uint64_t)buf[off] << 8) | (uint64_t)buf[off + 1];
+        off += 2;
+    }
+    else if (plen == 127)
+    {
+        if (len < off + 8)
+            return 0;
+        plen = 0;
+        for (i = 0; i < 8; i++)
+            plen = (plen << 8) | (uint64_t)buf[off + i];
+        off += 8;
     }
 
-    *masked = hdr[1] & 0x80;
-    *len = hdr[1] & 0x7F;
-
-    if (*len == 126)
+    if (plen > WS_MAX_PAYLOAD)
     {
-        if (conn_read_exact(fd, &ext16, 2) != SUCCESS)
-        {
-            *payload = NULL;
-            *len = 0;
-            return ERROR;
-        }
-        *len = ntohs(ext16);
-    }
-    else if (*len == 127)
-    {
-        if (conn_read_exact(fd, &ext64, 8) != SUCCESS)
-        {
-            *payload = NULL;
-            *len = 0;
-            return ERROR;
-        }
-        *len = be64toh(ext64);
+        log_msg(LOG_LEVEL_WARN, "WebSocket frame claims %llu bytes, over the %d limit\n",
+                (unsigned long long)plen, WS_MAX_PAYLOAD);
+        return -1;
     }
 
-    if (*masked && conn_read_exact(fd, mask, 4) != SUCCESS)
+    /* RFC 6455 6.1: frames from a client must be masked. */
+    if (!masked)
     {
-        *payload = NULL;
-        *len = 0;
-        return ERROR;
+        log_msg(LOG_LEVEL_WARN, "Unmasked WebSocket frame from client\n");
+        return -1;
     }
 
-    *payload = malloc((*len) + 1);
-    if (!*payload)
-    {
-        *len = 0;
-        return ERROR;
-    }
+    if (len < off + 4)
+        return 0;
 
-    n = (*len > 0) ? conn_read_exact(fd, *payload, *len) : SUCCESS;
-    if (n != SUCCESS)
-    {
-        free(*payload);
-        *payload = NULL;
-        *len = 0;
-        log_msg(LOG_LEVEL_ERROR, "Failed to read WebSocket frame payload from fd=%d\n", fd);
-        return ERROR;
-    }
+    mask = buf + off;
+    off += 4;
 
-    if (*masked)
-    {
-        for (i = 0; i < *len; i++)
-        {
-            (*payload)[i] ^= mask[i % 4];
-        }
-    }
+    if (len - off < plen)
+        return 0;
 
-    return SUCCESS;
+    out->payload_len = (size_t)plen;
+    out->payload = malloc(out->payload_len + 1);
+    if (!out->payload)
+        return -1;
+
+    for (i = 0; i < out->payload_len; i++)
+        out->payload[i] = (char)(buf[off + i] ^ mask[i % 4]);
+    out->payload[out->payload_len] = '\0';
+
+    *consumed = off + out->payload_len;
+    return 1;
 }
 
-static int m_ws_read_text_payload(int fd, char **payload, size_t *len)
+/* engine.io packet codes, carried as the first byte of a socket.io text frame. */
+static void m_sio_dispatch_text(client_t *c, const char* payload, size_t len)
 {
-    uint8_t hdr[2];
-    uint8_t *raw_payload;
-    uint8_t mask[4];
-    bool masked;
-    uint64_t payload_len;
-
-    *payload = NULL;
-    *len = 0;
-    if (m_ws_parse_frame(fd, hdr, &raw_payload, &payload_len, mask, &masked) == ERROR)
+    if (len == 0)
     {
-        *payload = NULL;
-        *len = 0;
-        return ERROR;
+        log_msg(LOG_LEVEL_WARN, "Empty socket.io frame from fd=%d\n", c->fd);
+        return;
     }
 
-    raw_payload[payload_len] = '\0';
-    *payload = (char *)raw_payload;
-    *len = payload_len;
-
-    return SUCCESS;
-}
-
-static int m_ws_handle_frame(client_t *cli)
-{
-    uint8_t hdr[2];
-    uint8_t *payload;
-    uint8_t mask[4];
-    uint8_t op;
-    bool masked;
-    uint64_t len;
-
-    if (m_ws_parse_frame(cli->fd, hdr, &payload, &len, mask, &masked) == ERROR)
+    switch (payload[0])
     {
-        REMOVE_CLIENT(cli->fd);
-        if (payload)
-            free(payload);
-        return SUCCESS;
-    }
-
-    op = hdr[0] & 0x0F;
-
-    switch (op)
-    {
-    case 0x1: /* TEXT */
-        if (m_ws_request_handler)
-            m_ws_request_handler(cli->fd, (char *)payload, len);
+    case '2': /* ping */
+        log_msg(LOG_LEVEL_DEBUG, "Received ping from fd=%d\n", c->fd);
+        m_send_ws_frame(c->fd, 0x1, "3", 1, true);
         break;
-    case 0x8: /* close */
-        REMOVE_CLIENT(cli->fd);
+    case '3': /* pong */
         break;
-    case 0x9: /* PING */
-        m_send_ws_frame(cli->fd, 0xA, payload, len, false); /* send PONG */
+    case '5': /* upgrade */
         break;
-    case 0xA: /* PONG */
-        log_msg(LOG_LEVEL_DEBUG, "Received pong from fd=%d\n", cli->fd);
+    case '4': /* message */
+        if (m_sio_request_handler)
+            m_sio_request_handler(c->fd, payload + 1, len - 1);
         break;
     default:
-        log_msg(LOG_LEVEL_WARN, "Unhandled WebSocket opcode %d for fd=%d\n", op, cli->fd);
+        log_msg(LOG_LEVEL_DEBUG, "Unhandled socket.io packet type '%c' from fd=%d\n",
+                payload[0], c->fd);
+        break;
+    }
+}
+
+/* Returns false when the client was removed and c must no longer be touched. */
+static bool m_ws_dispatch(client_t *c, const ws_frame_t *f)
+{
+    int fd = c->fd;
+
+    switch (f->opcode)
+    {
+    case 0x0: /* continuation */
+    case 0x1: /* text */
+    case 0x2: /* binary */
+        if (!f->fin)
+            log_msg(LOG_LEVEL_WARN,
+                    "Fragmented WebSocket message on fd=%d is handled as if complete\n", fd);
+
+        if (c->state == CS_SIO_WS_OPEN)
+            m_sio_dispatch_text(c, f->payload, f->payload_len);
+        else if (m_ws_request_handler)
+            m_ws_request_handler(fd, f->payload, f->payload_len);
+        break;
+
+    case 0x8: /* close */
+        log_msg(LOG_LEVEL_INFO, "WebSocket close from fd=%d\n", fd);
+        REMOVE_CLIENT(fd);
+        return false;
+
+    case 0x9: /* ping */
+        m_send_ws_frame(fd, 0xA, f->payload, f->payload_len, false);
+        break;
+
+    case 0xA: /* pong */
+        log_msg(LOG_LEVEL_DEBUG, "Received pong from fd=%d\n", fd);
+        break;
+
+    default:
+        log_msg(LOG_LEVEL_WARN, "Unhandled WebSocket opcode %d for fd=%d\n", f->opcode, fd);
         break;
     }
 
-    free(payload);
-    return SUCCESS;
+    return true;
 }
+
+static bool m_ws_drain_frames(client_t *c)
+{
+    for (;;)
+    {
+        ws_frame_t f;
+        size_t consumed = 0;
+        int r;
+
+        memset(&f, 0, sizeof(f));
+        r = m_ws_take_frame((const uint8_t*)c->rx_buf, c->rx_len, &f, &consumed);
+
+        if (r == 0)
+            return true; /* partial frame: wait for the rest */
+
+        if (r < 0)
+        {
+            log_msg(LOG_LEVEL_WARN, "Malformed WebSocket frame from fd=%d, closing\n", c->fd);
+            REMOVE_CLIENT(c->fd);
+            return false;
+        }
+
+        /* Consume before dispatching: dispatch may free c. */
+        if (consumed < c->rx_len)
+            memmove(c->rx_buf, c->rx_buf + consumed, c->rx_len - consumed);
+        c->rx_len -= consumed;
+
+        if (!m_ws_dispatch(c, &f))
+        {
+            free(f.payload);
+            return false;
+        }
+
+        free(f.payload);
+    }
+}
+
 
 static void m_compute_ws_accept(const char *key, char *out_b64)
 {
@@ -414,47 +487,6 @@ static void m_do_sio_ws_handshake(int fd, const char *req, client_t *c)
 
     /* Send the connection accepted frame */
     m_send_ws_frame(fd, 0x1, "40", 2, true);
-}
-static int m_sio_ws_handle_frame(client_t *c)
-{
-    char *payload;
-    size_t len;
-    char code;
-    char* body;
-    size_t body_len;
-
-    if (m_ws_read_text_payload(c->fd, &payload, &len) == ERROR)
-    {
-        log_msg(LOG_LEVEL_ERROR, "Failed to read WebSocket payload for fd=%p\n", c);
-        REMOVE_CLIENT(c->fd);
-        if (payload)
-            free(payload);
-        return SUCCESS;
-    }
-
-    code = payload[0];
-    body = payload + 1;
-    body_len = len - 1;
-
-    switch (code)
-    {
-    case '2': /* ping */
-        log_msg(LOG_LEVEL_DEBUG, "Received ping from fd=%d\n", c->fd);
-        m_send_ws_frame(c->fd, 0x1, "3", 1, true);
-        break;
-    case '3': /* PONG */
-        break;
-    case '5': /* UPGRADE */
-        break;
-    case '4': /* Socket-io message */
-        if (m_sio_request_handler)
-            m_sio_request_handler(c->fd, body, body_len);
-        break;
-    default:
-        break;
-    }
-    free(payload);
-    return SUCCESS;
 }
 
 static bool m_is_sio_path(const char *req)
@@ -745,11 +777,25 @@ int m_handle_client_event(int fd)
          */
     }
 
-    if (c->state == CS_WS_OPEN)
-        return m_ws_handle_frame(c);
+    if (c->state == CS_WS_OPEN || c->state == CS_SIO_WS_OPEN)
+    {
+        if (client_read_into_buffer(c, WS_RX_MAX, &peer_closed) != SUCCESS)
+        {
+            REMOVE_CLIENT(fd);
+            return SUCCESS;
+        }
 
-    if (c->state == CS_SIO_WS_OPEN)
-        return m_sio_ws_handle_frame(c);
+        if (!m_ws_drain_frames(c))
+            return SUCCESS; /* client already removed */
+
+        if (peer_closed)
+        {
+            log_msg(LOG_LEVEL_INFO, "WebSocket peer closed: fd=%d\n", fd);
+            REMOVE_CLIENT(fd);
+        }
+
+        return SUCCESS;
+    }
 
     log_msg(LOG_LEVEL_DEBUG, "Handling client event for fd=%d in HTTP state\n", fd);
     if (client_read_into_buffer(c, 4 * 1024 * 1024, &peer_closed) != SUCCESS)
@@ -764,6 +810,16 @@ int m_handle_client_event(int fd)
     {
         REMOVE_CLIENT(fd);
         return ERROR;
+    }
+
+    /*
+     * The upgrade may have just switched this connection to websocket with the
+     * client's first frame already buffered behind the handshake request.
+     */
+    if ((c->state == CS_WS_OPEN || c->state == CS_SIO_WS_OPEN) && c->rx_len > 0)
+    {
+        if (!m_ws_drain_frames(c))
+            return SUCCESS;
     }
 
     if (peer_closed)

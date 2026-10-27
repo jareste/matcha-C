@@ -47,9 +47,6 @@ ssize_t conn_write(int fd, const void *buf, size_t len);
 ssize_t conn_writev2(int fd, const void *a, size_t alen, const void *b, size_t blen);
 int     conn_printf(int fd, const char *fmt, ...);
 
-/* Blocking read of exactly len bytes */
-int conn_read_exact(int fd, void *buf, size_t len);
-
 /* used for flushing the tx in case of some kind of '-1' EWOULDBLOCK-like */
 int  conn_flush(int fd, bool *want_write);
 bool conn_has_pending_tx(int fd);

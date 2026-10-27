@@ -65,6 +65,11 @@ route_entry_t* router_find(route_entry_t** routes_hm, const char* path)
  * Note: `origin` is borrowed, not owned. This used to free() it on every path,
  * which left the caller holding a dangling pointer the moment it wanted the
  * origin for its own response.
+ *
+ * Every failure path answers the client before returning ERROR. Three of them
+ * used to return without sending anything, so a request carrying a well-formed
+ * but stale cookie got no reply at all and the connection hung until the peer
+ * timed out.
  */
 int router_validate_token_for_server(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin)
 {
@@ -96,7 +101,9 @@ int router_validate_token_for_server(int fd, const char* request, char** out_use
     rc = token_validate(auth_cookie + 6, out_username, out_email, out_uid);
     if (rc != SUCCESS)
     {
-        log_msg(LOG_LEVEL_ERROR, "Token validation failed for token: %s\n", auth_cookie + 6);
+        log_msg(LOG_LEVEL_WARN, "Token validation failed on fd=%d\n", fd);
+        router_http_generate_response(fd, CODE_401_UNAUTHORIZED,
+                                      "{\"error\": \"Invalid or expired session\"}", origin);
         if (*out_email) free(*out_email);
         if (*out_username) free(*out_username);
         free(cookies);
@@ -106,7 +113,9 @@ int router_validate_token_for_server(int fd, const char* request, char** out_use
     rc = db_select_user_by_email(get_db_id(), *out_email, &user);
     if (rc != SUCCESS || !user)
     {
-        log_msg(LOG_LEVEL_ERROR, "Failed to select user by email %s\n", *out_email);
+        log_msg(LOG_LEVEL_WARN, "Token names an unknown user (%s) on fd=%d\n", *out_email, fd);
+        router_http_generate_response(fd, CODE_401_UNAUTHORIZED,
+                                      "{\"error\": \"Invalid or expired session\"}", origin);
         if (*out_email) free(*out_email);
         if (*out_username) free(*out_username);
         free(cookies);
@@ -121,7 +130,10 @@ int router_validate_token_for_server(int fd, const char* request, char** out_use
         log_msg(LOG_LEVEL_ERROR, "user->username: %s, out_username: %s, user->id: %d, out_uid: %d\n",
                 user->username, *out_username, user->id, *out_uid);
         log_msg(LOG_LEVEL_ERROR, "\nutoken: '%s'\natoken: '%s'\n", user->token, auth_cookie + 6);
-        log_msg(LOG_LEVEL_ERROR, "Invalid token for user %s (uid=%d),\n'%s'\n", *out_username, *out_uid, user->token);
+        log_msg(LOG_LEVEL_WARN, "Stale or mismatched token for user %s (uid=%d) on fd=%d\n",
+                *out_username, *out_uid, fd);
+        router_http_generate_response(fd, CODE_401_UNAUTHORIZED,
+                                      "{\"error\": \"Invalid or expired session\"}", origin);
         if (user) db_tuser_free_user(user);
         if (*out_email)
         {

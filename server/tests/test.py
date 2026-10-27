@@ -5,8 +5,16 @@ import requests
 import time
 import warnings
 
-BASE_URL = "http://localhost:8080"
+# Point the suite at either mode:
+#   make all  -> http://localhost:8080   (default)
+#   make tls  -> MATCHA_BASE_URL=https://localhost:8443 pytest tests/
+BASE_URL = os.environ.get("MATCHA_BASE_URL", "http://localhost:8080")
+VERIFY_TLS = os.environ.get("MATCHA_VERIFY_TLS", "0") == "1"
 COOKIE_FILE = "cookies.pkl"
+
+if BASE_URL.startswith("https") and not VERIFY_TLS:
+    import urllib3
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def save_cookies(session: requests.Session):
     with open(COOKIE_FILE, "wb") as f:
@@ -20,6 +28,7 @@ def load_cookies(session: requests.Session):
 @pytest.fixture(scope="session")
 def session():
     s = requests.Session()
+    s.verify = VERIFY_TLS
     # load_cookies(s)
     return s
 
@@ -53,7 +62,8 @@ def test_register_and_login(session):
             if resp.status_code == 400:
                 assert "already exists" in resp.text
             else:
-                assert resp.status_code == 200
+                # 201 Created: register makes a new resource.
+                assert resp.status_code == 201
 
             time.sleep(0.2)
 

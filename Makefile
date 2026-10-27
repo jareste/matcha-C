@@ -52,6 +52,14 @@ sh: docker-up
 db_connect: docker-up
 	@docker exec -it matcha-db psql -U admin -d matcha_db
 
+PY ?= $(shell [ -x server/.venv/bin/python ] && echo server/.venv/bin/python || echo python3)
+
+test: docker-up
+	@$(PY) -m pytest server/tests -q
+
+test-tls: docker-up
+	@MATCHA_BASE_URL=https://localhost:8443 $(PY) -m pytest server/tests -q
+
 down:
 	@docker compose down
 
@@ -60,4 +68,4 @@ fclean:
 	@echo "Removing containers AND the database volume..."
 	@docker compose down -v
 
-.PHONY: all docker-up logs ps restart re sh db_connect down fclean
+.PHONY: all docker-up logs ps restart re sh db_connect test test-tls down fclean

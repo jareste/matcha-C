@@ -182,6 +182,6 @@ docker_clean:
 	@echo "Docker cleanup complete."
 
 test:
-	@pytest tests/test.py
+	@pytest tests
 
 -include $(DEP)

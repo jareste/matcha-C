@@ -1,6 +1,5 @@
 #define _GNU_SOURCE
 #include <errno.h>
-#include <poll.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,7 +19,6 @@
 
 #define CONN_TX_INITIAL_CAP   4096
 #define CONN_TX_MAX_CAP       (16 * 1024 * 1024)
-#define CONN_READ_EXACT_MS    5000
 /* SSL_read/SSL_write take an int length; clamp so a huge size_t cannot wrap. */
 #define CONN_SSL_MAX_CHUNK    (1 << 20)
 
@@ -425,49 +423,6 @@ ssize_t conn_read(int fd, void *buf, size_t len)
 
         return CONN_ERROR;
     }
-}
-
-int conn_read_exact(int fd, void *buf, size_t len)
-{
-    size_t got = 0;
-    int waited_ms = 0;
-    int pr;
-
-    while (got < len)
-    {
-        ssize_t n = conn_read(fd, (char*)buf + got, len - got);
-
-        if (n > 0)
-        {
-            got += (size_t)n;
-            continue;
-        }
-
-        if (n == CONN_AGAIN)
-        {
-            struct pollfd pfd = { .fd = fd, .events = POLLIN, .revents = 0 };
-
-            if (waited_ms >= CONN_READ_EXACT_MS)
-            {
-                log_msg(LOG_LEVEL_WARN,
-                        "conn: timed out waiting for %zu/%zu bytes on fd=%d\n", got, len, fd);
-                return ERROR;
-            }
-
-            pr = poll(&pfd, 1, 100);
-            if (pr < 0 && errno != EINTR)
-                return ERROR;
-
-            if (pr == 0)
-                waited_ms += 100;
-
-            continue;
-        }
-
-        return ERROR;
-    }
-
-    return SUCCESS;
 }
 
 /********************************************/
