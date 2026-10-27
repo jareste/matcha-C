@@ -17,6 +17,7 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 |---|---|---|
 | POST | `/api/register` | — |
 | POST | `/api/login` | — |
+| POST | `/api/verify-email` | — |
 | GET | `/api/validate` | ✔ |
 | POST | `/api/logout` | ✔ |
 | GET | `/api/profile/get` | ✔ |
@@ -55,6 +56,19 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 - **400** `Invalid JSON` · `Email is required` · `Password is required` · `Email not found` · `Invalid credentials`
 - **405** `Method Not Allowed`
 - **500** `Failed to generate token`
+
+### POST `/api/verify-email` (proposed, not implemented yet)
+
+Called by the frontend page `/verify-email?token=<token>`, which is the link sent in the registration email. Tokens are single-use.
+
+```json
+{"token": ""}
+```
+
+- **200** `{"success": true, "message": "Email verified"}`
+- **400** `Token is required` · `Invalid token` (unknown or already used)
+- **410** `Token expired`
+- **500** `Failed to verify email`
 
 ### GET `/api/validate`
 
@@ -196,4 +210,5 @@ Raw WebSocket. Connects, no handlers.
 - `GET /api/me` (or keep `/api/validate`)
 - `/api/auth/*` naming
 - 401 vs 403 vs 400
+- `/api/verify-email` contract (frontend relies on 400 = invalid, 410 = expired)
 - CSRF, date format (ISO 8601?), pagination
