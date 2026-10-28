@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { apiPost } from './api.ts'
+import { apiGet, apiPost } from './api.ts'
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -42,5 +42,26 @@ describe('apiPost', () => {
     const res = await apiPost('/x', {})
     expect(res.ok).toBe(false)
     expect(res.status).toBe(0)
+  })
+
+  test('sends no body or JSON header when there is no payload', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await apiPost('/api/logout')).toEqual({ ok: true, status: 200, data: null })
+    const [, init] = fetchMock.mock.calls[0]
+    expect(init).toEqual({ method: 'POST', credentials: 'include' })
+  })
+})
+
+describe('apiGet', () => {
+  test('sends a GET with credentials and returns the data', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { username: 'alice' }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    expect(await apiGet('/api/validate')).toEqual({ ok: true, status: 200, data: { username: 'alice' } })
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toMatch(/\/api\/validate$/)
+    expect(init).toEqual({ method: 'GET', credentials: 'include' })
   })
 })

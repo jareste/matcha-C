@@ -1,13 +1,9 @@
 import { screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { renderAt } from '../test/utils.tsx'
+import { jsonResponse, renderAt, stubApi } from '../test/utils.tsx'
 
 const fetchMock = vi.fn()
-
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-}
 
 async function fillForm(overrides: Partial<Record<string, string>> = {}) {
   const values = {
@@ -30,7 +26,7 @@ function submit() {
 
 beforeEach(() => {
   fetchMock.mockReset()
-  vi.stubGlobal('fetch', fetchMock)
+  stubApi(fetchMock)
 })
 
 afterEach(() => {
