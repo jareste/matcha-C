@@ -6,6 +6,7 @@
 #include "server/server_api.h"
 #include "router/router_api.h"
 #include "mail/mail_api.h"
+#include "api/api.h"
 #include "db/db_api.h"
 #include "db/tables/db_table_user.h"
 #include "db/tables/db_table_tag.h"
@@ -16,8 +17,20 @@
 #include "db/tables/db_table_notification.h"
 #include "db/tables/db_table_session.h"
 #include "db/db_gen.h"
+#include "../third_party/cJSON/cJSON.h"
 
 static bool m_die = false;
+DB_ID m_DB;
+
+DB_ID get_db_id()
+{
+    return m_DB;
+}
+
+int validate_cookies(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin)
+{
+    return router_validate_token_for_server(fd, request, out_username, out_email, out_uid, origin);
+}
 
 void signal_handler(int signum)
 {
@@ -32,9 +45,27 @@ static int m_http_request_handler(int fd, const char *request, size_t request_le
     return router_handle_http_request(fd, request, request_len);
 }
 
+static int m_ws_request_handler(int fd, const char *request, size_t request_len)
+{
+    (void)request_len;
+    log_msg(LOG_LEVEL_DEBUG, "WebSocket request handler not implemented yet for fd=%d\n", fd);
+    log_msg(LOG_LEVEL_DEBUG, "received '%zu' bytes on fd=%d\n", request_len, fd);
+    log_msg(LOG_LEVEL_DEBUG, "received message: '%.*s'\n", (int)request_len, request);
+    return ERROR;
+}
+
+static int m_sio_request_handler(int fd, const char *request, size_t request_len)
+{
+    (void)request_len;
+    router_handle_sio_request(fd, request, request_len);
+    return ERROR;
+}
+
 int main_loop()
 {
     int ret;
+
+    log_msg(LOG_LEVEL_INFO, "Entering main loop...\n");
     while (!m_die)
     {
         ret = server_select();
@@ -80,29 +111,41 @@ int main()
 {
     ssl_config ssl_config;
     log_config log_config;
-    DB_ID DB;
-
+    db_config db_config;
+    
     if (parse_config("config") == ERROR)
             goto error;
 
     parse_set_log_config(&log_config);
     log_init(log_config.LOG_FILE_PATH, log_config.LOG_ERASE, log_config.LOG_LEVEL);
 
+    parse_set_db_config(&db_config);
     parse_set_ssl_config(&ssl_config);
-    if (server_init(ssl_config.PORT) == ERROR)
+    if (server_init(ssl_config.PORT, ssl_config.SSL_ENABLE,
+                    ssl_config.CERT_PATH, ssl_config.KEY_PATH) == ERROR)
         goto error;
 
-    server_set_http_request_handler(m_http_request_handler);
+    server_set_request_handlers(m_http_request_handler, m_ws_request_handler, m_sio_request_handler);
+    server_set_new_client_handler(sio_on_open);
+    server_set_client_close_handler(sio_on_close);
 
-    if (m_init_dbs(&DB) == ERROR)
+    if (m_init_dbs(&m_DB) == ERROR)
+    {
+        log_msg(LOG_LEVEL_ERROR,
+                "Database init failed (host=%s port=%s db=%s): is postgres up and reachable?\n",
+                db_config.DB_HOST, db_config.DB_PORT, db_config.DB_NAME);
         goto error;
+    }
 
+    api_init();
+    
     parse_free_config(); /* init config */
 
     /* if server closes us something weird could happen */
     signal(SIGPIPE, SIG_IGN);
     signal(SIGINT, signal_handler);
     main_loop();
+    router_http_clear();
     log_msg(LOG_LEVEL_INFO, "Exiting...\n");
     log_close();
 
@@ -111,5 +154,6 @@ int main()
 error:
     parse_free_config();
     server_cleanup();
+    router_http_clear();
     return ERROR;
 }

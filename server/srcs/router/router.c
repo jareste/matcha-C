@@ -1,3 +1,4 @@
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -7,229 +8,150 @@
 #include "../parse/config_file.h"
 #include "../../inc/ft_malloc.h"
 #include "../../inc/error_codes.h"
+#include "../api/umgmt/token.h"
+#include "../db/db_api.h"
+#include "../db/db_gen.h"
+#include "../db/tables/db_table_user.h"
 #include "router_api.h"
 
-static route_entry_t* m_routes = NULL;
+#include "../server/server_api.h"
 
-static const char* m_http_code_to_status_text(HTTP_response_code_t code)
+DB_ID get_db_id();
+
+void router_delete(route_entry_t** routes_hm, route_entry_t* entry)
 {
-    switch (code)
-    {
-        case CODE_200_OK: return "OK";
-        case CODE_201_CREATED: return "Created";
-        case CODE_204_NO_CONTENT: return "No Content";
-        case CODE_400_BAD_REQUEST: return "Bad Request";
-        case CODE_404_NOT_FOUND: return "Not Found";
-        case CODE_405_METHOD_NOT_ALLOWED: return "Method Not Allowed";
-        case CODE_500_INTERNAL_SERVER_ERROR: return "Internal Server Error";
-        case CODE_503_SERVICE_UNAVAILABLE: return "Service Unavailable";
-        default: return "Unknown";
-    }
-}
-
-int router_http_generate_response(int fd, HTTP_response_code_t code, const char* body)
-{
-    char body_buf[128];
-    char header[512];
-    size_t body_len;
-    const char* status_text;
-    int header_len;
-
-    if (code == CODE_204_NO_CONTENT)
-    {
-        snprintf(header, sizeof(header), "HTTP/1.1 204 No Content\r\nConnection: close\r\n\r\n");
-
-        send(fd, header, strlen(header), 0);
-    }
-    else if (body)
-    {
-        status_text = m_http_code_to_status_text(code);
-        body_len = strlen(body);
-
-        header_len = snprintf(header, sizeof(header),
-            "HTTP/1.1 %d %s\r\n"
-            "Content-Type: application/json\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Access-Control-Allow-Methods: POST\r\n"
-            "Access-Control-Allow-Headers: Content-Type\r\n"
-            "Content-Length: %zu\r\n"
-            "Connection: close\r\n\r\n",
-            code, status_text, body_len);
-
-        if (header_len <= 0 || (size_t)header_len >= sizeof(header))
-        {
-            log_msg(1, "Header formatting error\n");
-            return ERROR;
-        }
-
-        send(fd, header, header_len, 0);
-        send(fd, body, body_len, 0);
-    }
-    else
-    {
-        status_text = m_http_code_to_status_text(code);
-
-        body_len = snprintf(body_buf, sizeof(body_buf), "{\"error\": \"%s\"}", status_text);
-
-        header_len = snprintf(header, sizeof(header),
-            "HTTP/1.1 %d %s\r\n"
-            "Content-Type: application/json\r\n"
-            "Access-Control-Allow-Origin: *\r\n"
-            "Access-Control-Allow-Methods: POST\r\n"
-            "Access-Control-Allow-Headers: Content-Type\r\n"
-            "Content-Length: %zu\r\n"
-            "Connection: close\r\n\r\n",
-            code, status_text, body_len);
-
-        if (header_len <= 0 || (size_t)header_len >= sizeof(header))
-        {
-            log_msg(1, "Header formatting error\n");
-            return ERROR;
-        }
-
-        send(fd, header, header_len, 0);
-        send(fd, body_buf, body_len, 0);
-    }
-
-    log_msg(0, "Response sent to fd=%d with code %d\n", fd, code);
-    return SUCCESS;
-}
-
-void router_add(const char* path, route_cb_t cb, void* user_data)
-{
-    route_entry_t* entry = malloc(sizeof(*entry));
-
-    entry->path = strdup(path);
-    entry->handler = cb;
-    entry->user_data = user_data;
-    HASH_ADD_KEYPTR(hh, m_routes, entry->path, strlen(entry->path), entry);
-}
-
-static route_entry_t* router_find(const char* path)
-{
-    route_entry_t* entry = NULL;
-
-    HASH_FIND_STR(m_routes, path, entry);
-    return entry;
-}
-
-void router_delete(route_entry_t* entry)
-{
-    HASH_DEL(m_routes, entry);
+    HASH_DEL(*routes_hm, entry);
     free(entry->path);
     free(entry);
 }
 
-void router_clear()
+void router_clear(route_entry_t** routes_hm)
 {
     route_entry_t* current;
     route_entry_t* tmp;
 
-    HASH_ITER(hh, m_routes, current, tmp)
+    printf("Router: Clearing all routes\n");
+    HASH_ITER(hh, *routes_hm, current, tmp)
     {
-        HASH_DEL(m_routes, current);
+        printf("Router: Deleting route '%s'\n", current->path);
+        HASH_DEL(*routes_hm, current);
         free(current->path);
         free(current);
     }
 }
 
-int router_parse_http_request(const char* request, size_t request_len, char** method, char** route, char** headers, char** body)
+void router_add(route_entry_t** routes_hm, const char* path, route_cb_t cb, void* user_data, http_request_flags_t flags)
 {
-    const char* first_line_end;
-    const char* line_start;
-    const char* line_end;
-    const char* space1;
-    const char* space2;
-    const char* headers_end;
-    const char* body_start;
-    size_t headers_len;
-    size_t line_len;
+    route_entry_t* entry = malloc(sizeof(*entry));
 
-    if (!request || request_len == 0 || !method || !route || !headers || !body)
-        return ERROR;
+    log_msg(LOG_LEVEL_BOOT, "Router: Route '%s' added successfully.\n", path);
 
-    first_line_end = strstr(request, "\r\n");
-    if (!first_line_end)
-        return ERROR;
-
-    line_start = request;
-    line_end = first_line_end;
-    line_len = line_end - line_start;
-
-    space1 = memchr(line_start, ' ', line_len);
-    if (!space1 || space1 >= line_end)
-        return ERROR;
-
-    *method = strndup(line_start, space1 - line_start);
-
-    space2 = memchr(space1 + 1, ' ', line_end - space1 - 1);
-    if (!space2 || space2 >= line_end)
-        return ERROR;
-
-    *route = strndup(space1 + 1, space2 - (space1 + 1));
-
-    headers_end = strstr(first_line_end + 2, "\r\n\r\n");
-    if (!headers_end)
-        return ERROR;
-
-    headers_len = headers_end - (first_line_end + 2);
-    *headers = strndup(first_line_end + 2, headers_len);
-
-    body_start = headers_end + 4;
-    if ((size_t)(body_start - request) < request_len)
-        *body = strndup(body_start, request + request_len - body_start);
-    else
-        *body = NULL;
-
-    return SUCCESS;
+    entry->path = strdup(path);
+    entry->handler = cb;
+    entry->user_data = user_data;
+    entry->flags = flags;
+    HASH_ADD_KEYPTR(hh, *routes_hm, entry->path, strlen(entry->path), entry);
 }
 
-int router_handle_http_request(int fd, const char* request, size_t request_len)
+route_entry_t* router_find(route_entry_t** routes_hm, const char* path)
 {
-    const char* route = NULL;
-    const char* first_line_end = NULL;
-    char first_line[256] = {0};
-    char* space_pos = NULL;
-    char *route_end = NULL;
-    size_t first_line_len = 0;
-    route_entry_t* route_entry = NULL;
-    http_request_ctx_t request_ctx;
+    route_entry_t* entry = NULL;
 
-    first_line_end = strstr(request, "\r\n");
-    if (first_line_end)
+    HASH_FIND_STR(*routes_hm, path, entry);
+    return entry;
+}
+
+/*
+ * Note: `origin` is borrowed, not owned. This used to free() it on every path,
+ * which left the caller holding a dangling pointer the moment it wanted the
+ * origin for its own response.
+ *
+ * Every failure path answers the client before returning ERROR. Three of them
+ * used to return without sending anything, so a request carrying a well-formed
+ * but stale cookie got no reply at all and the connection hung until the peer
+ * timed out.
+ */
+int router_validate_token_for_server(int fd, const char* request, char** out_username, char** out_email, int* out_uid, char* origin)
+{
+    int rc;
+    user_t* user;
+    char* cookies;
+    char* auth_cookie;
+
+    *out_username = NULL;
+    *out_email = NULL;
+    *out_uid = 0;
+
+    cookies = get_header_value(request, "Cookie");
+    if (!cookies)
     {
-        first_line_len = first_line_end - request;
-        strncpy(first_line, request, first_line_len);
-
-        space_pos = strchr(first_line, ' ');
-        if (space_pos)
-        {
-            *space_pos = '\0';
-            route = space_pos + 1;
-
-            route_end = strchr(route, ' ');
-            if (route_end)
-                *route_end = '\0';
-        }
+        log_msg(LOG_LEVEL_ERROR, "No cookies in request from fd=%d\n", fd);
+        router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        return ERROR;
+    }
+    auth_cookie = strstr(cookies, "token=");
+    if (!auth_cookie)
+    {
+        free(cookies);
+        rc = router_http_generate_response(fd, CODE_403_FORBIDDEN, "{\"error\": \"Forbidden\"}", origin);
+        log_msg(LOG_LEVEL_ERROR, "No token in request from fd=%d\n", fd);
+        return ERROR;
     }
 
-    if (!route)
-        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}");
+    rc = token_validate(auth_cookie + 6, out_username, out_email, out_uid);
+    if (rc != SUCCESS)
+    {
+        log_msg(LOG_LEVEL_WARN, "Token validation failed on fd=%d\n", fd);
+        router_http_generate_response(fd, CODE_401_UNAUTHORIZED,
+                                      "{\"error\": \"Invalid or expired session\"}", origin);
+        if (*out_email) free(*out_email);
+        if (*out_username) free(*out_username);
+        free(cookies);
+        return ERROR;
+    }
 
-    route_entry = router_find(route);
-    if (!route_entry)
-        return router_http_generate_response(fd, CODE_404_NOT_FOUND, "{\"error\": \"Not Found\"}");
+    rc = db_select_user_by_email(get_db_id(), *out_email, &user);
+    if (rc != SUCCESS || !user)
+    {
+        log_msg(LOG_LEVEL_WARN, "Token names an unknown user (%s) on fd=%d\n", *out_email, fd);
+        router_http_generate_response(fd, CODE_401_UNAUTHORIZED,
+                                      "{\"error\": \"Invalid or expired session\"}", origin);
+        if (*out_email) free(*out_email);
+        if (*out_username) free(*out_username);
+        free(cookies);
+        return ERROR;
+    }
 
-    if (!route_entry->handler)
-        return router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}");
+    if ((strcmp(user->username, *out_username) != 0) || 
+        (user->id != *out_uid) ||
+        (user->token == NULL) ||
+        (strcmp(user->token, auth_cookie + 6) != 0))
+    {
+        log_msg(LOG_LEVEL_ERROR, "user->username: %s, out_username: %s, user->id: %d, out_uid: %d\n",
+                user->username, *out_username, user->id, *out_uid);
+        log_msg(LOG_LEVEL_ERROR, "\nutoken: '%s'\natoken: '%s'\n", user->token, auth_cookie + 6);
+        log_msg(LOG_LEVEL_WARN, "Stale or mismatched token for user %s (uid=%d) on fd=%d\n",
+                *out_username, *out_uid, fd);
+        router_http_generate_response(fd, CODE_401_UNAUTHORIZED,
+                                      "{\"error\": \"Invalid or expired session\"}", origin);
+        if (user) db_tuser_free_user(user);
+        if (*out_email)
+        {
+            free(*out_email);
+            *out_email = NULL;
+        }
+        if (*out_username)
+        {
+            free(*out_username);
+            *out_username = NULL;
+        }
+        free(cookies);
+        return ERROR;
+    }
 
-    /* Populate request ctx */
-    request_ctx.fd = fd;
-    request_ctx.request = request;
-    request_ctx.request_len = request_len;
+    if (user)
+        db_tuser_free_user(user);
 
-    /* call the handler */
-    route_entry->handler(&request_ctx, route_entry->user_data);
-
+    free(cookies);
     return SUCCESS;
 }

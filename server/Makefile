@@ -3,8 +3,8 @@ NAME = matCha
 #########
 RM = rm -rf
 CC = cc
-CFLAGS = -Werror -Wextra -Wall -g -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
-# CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
+# CFLAGS = -Werror -Wextra -Wall -Wno-unused-result -O3 -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
+CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -I$(OPENSSL_BUILD_DIR)/include -I/usr/include/postgresql -I$(HOME)/postgresql/include -Ithird_party/uthash-master/src/. -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=address -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # CFLAGS = -Werror -Wextra -Wall -g -fsanitize=thread -O3 -I$(OPENSSL_BUILD_DIR)/include -Iinc -DUSE_SSL #-DDEBUG
 # POSTGRESS_LIB = -lpq
@@ -16,10 +16,14 @@ LDFLAGS =	-Lsrcs/log -llog \
 			-Lsrcs/router -lrouter \
 			-Lsrcs/mail -lmail \
 			-Lsrcs/db -ldb \
-			-lpthread -lm -ldl $(POSTGRESS_LIB)
+			-Lsrcs/api -lapi \
+			-lpthread -lm -ldl \
+			-lssl -lcrypto $(POSTGRESS_LIB)\
+			-L$(cJSON_DIR) -lcjson
+
 RELEASE_CFLAGS = -Werror -Wextra -Wall -g -O3
 
-LIB_DIRS := log parse server router mail db
+LIB_DIRS := log parse server router mail db api
 LIB_PATHS := $(addprefix srcs/, $(LIB_DIRS))
 LIBS := $(addprefix -l, $(LIB_DIRS))
 LIBFLAGS := $(addprefix -Lsrcs/, $(LIB_DIRS))
@@ -27,6 +31,11 @@ LIB_NAMES := $(foreach dir,$(LIB_DIRS),srcs/$(dir)/lib$(dir).a)
 
 SUBMAKE = $(MAKE) --silent -C
 #########
+
+cJSON_DIR = third_party/cJSON
+cJSON_SRC = $(cJSON_DIR)/cJSON.c $(cJSON_DIR)/cJSON_Utils.c
+cJSON_OBJ = $(cJSON_DIR)/objs/cJSON.o $(cJSON_DIR)/objs/cJSON_Utils.o
+cJSON_LIB = $(cJSON_DIR)/libcjson.a
 
 #########
 FILES = main  ft_list ft_malloc
@@ -51,6 +60,8 @@ OPENSSL_INSTALL_DIR := third_party/openssl_install
 OPENSSL_BUILD_DIR := third_party/openssl_build
 OPENSSL_BUILD_DONE := $(OPENSSL_INSTALL_DIR)/lib/libssl.a
 
+MULTIPARSER_DIR := $(THIRD_PARTY_PATH)/multipart-parser-c
+MULTIPARSER_OBJ := $(MULTIPARSER_DIR)/multipart_parser.o
 
 #########
 $(OBJ_DIR)/%.o: %.c
@@ -58,12 +69,13 @@ $(OBJ_DIR)/%.o: %.c
 	${CC} -MMD $(CFLAGS) -c $< -o $@
 
 
-all: .gitignore create_cert build_libs
+all: .gitignore create_cert build_libs build_cjson
 	@echo "\033[1;32mBuilding $(NAME)...\033[0m"
+	@make --silent -C $(MULTIPARSER_DIR)
 	@$(MAKE) $(NAME)
 
 $(NAME): $(OBJ) $(LIB_NAMES)
-	$(CC) $(CFLAGS) $(OBJ) -o $(NAME) $(LDFLAGS) $(LIBFLAGS) $(LIBS)
+	$(CC) $(CFLAGS) $(OBJ) -o $(NAME) $(LDFLAGS) $(LIBFLAGS) $(LIBS) $(MULTIPARSER_OBJ)
 	@echo "EVERYTHING DONE  "
 #	@./.add_path.sh
 
@@ -72,6 +84,16 @@ build_libs:
 		echo "\033[1;32mBuilding library in $$dir...\033[0m"; \
 		$(SUBMAKE) $$dir; \
 	done
+
+$(cJSON_LIB): $(cJSON_SRC)
+	@echo "\033[1;32mBuilding cJSON...\033[0m"
+	@mkdir -p $(cJSON_DIR)/objs
+	@$(CC) $(CFLAGS) -c $(cJSON_DIR)/cJSON.c -o $(cJSON_DIR)/objs/cJSON.o
+	@$(CC) $(CFLAGS) -c $(cJSON_DIR)/cJSON_Utils.c -o $(cJSON_DIR)/objs/cJSON_Utils.o
+	@ar rcs $(cJSON_LIB) $(cJSON_OBJ)
+	@echo "cJSON built successfully."
+
+build_cjson: $(cJSON_LIB)
 
 release: CFLAGS = $(RELEASE_CFLAGS)
 release: re
@@ -89,7 +111,10 @@ fclean: clean
 	@make --silent -C srcs/router fclean
 	@make --silent -C srcs/mail fclean
 	@make --silent -C srcs/db fclean
+	@make --silent -C srcs/api fclean
+	@make --silent -C $(MULTIPARSER_DIR) clean
 	@$(RM) $(NAME)
+	@$(RM) $(cJSON_LIB) $(cJSON_OBJ)
 	@cd $(OPENSSL_SRC_DIR) 2>/dev/null && [ -f Makefile ] && make clean || true
 	@rm -rf $(OPENSSL_INSTALL_DIR)
 	@echo "EVERYTHING REMOVED   "
@@ -109,12 +134,13 @@ re: fclean all
 		echo ".gitignore" >> .gitignore; \
 		echo "log.txt" >> .gitignore; \
 		echo "*.o" >> .gitignore; \
+		echo "cookies.pkl" >> .gitignore; \
 		echo ".gitignore created and updated with entries."; \
 	else \
 		echo ".gitignore already exists."; \
 	fi
 
-.PHONY: all clean fclean re release .gitignore compile_ssl create_cert  db_up db_down db_reset
+.PHONY: all clean fclean re release .gitignore compile_ssl create_cert  db_up db_down db_reset test
 
 create_cert:
 	@if [ ! -f certs/cert.pem ]; then \
@@ -127,12 +153,12 @@ create_cert:
 db_up:
 	@service docker start || true
 	@echo "Starting the database using Docker Compose..."
-	@docker compose -f ../BBDD/docker-compose.yml up -d
+	@docker compose -f ../BBDD/docker-compose.yml up -d || docker-compose -f ../BBDD/docker-compose.yml up -d
 	@echo "Database is up and running."
 
 db_down:
 	@echo "Stopping the database using Docker Compose..."
-	@docker compose -f ../BBDD/docker-compose.yml down || true
+	@docker compose -f ../BBDD/docker-compose.yml down || docker-compose -f ../BBDD/docker-compose.yml down || true
 	@echo "Database has been stopped."
 
 db_clean:
@@ -154,5 +180,8 @@ docker_clean:
 	@docker system prune -af || true
 	@docker volume prune -f || true
 	@echo "Docker cleanup complete."
+
+test:
+	@pytest tests
 
 -include $(DEP)
