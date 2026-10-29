@@ -1,16 +1,12 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { StrictMode } from 'react'
 import { MemoryRouter } from 'react-router'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import App from '../App.tsx'
-import { renderAt } from '../test/utils.tsx'
+import { jsonResponse, renderAt, stubApi } from '../test/utils.tsx'
 
 const fetchMock = vi.fn()
-
-function jsonResponse(status: number, body: unknown) {
-  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
-}
 
 function heading(name: string) {
   return screen.findByRole('heading', { level: 1, name })
@@ -18,7 +14,7 @@ function heading(name: string) {
 
 beforeEach(() => {
   fetchMock.mockReset()
-  vi.stubGlobal('fetch', fetchMock)
+  stubApi(fetchMock)
 })
 
 afterEach(() => {
@@ -32,7 +28,7 @@ describe('verify email page', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Verifying your email…' })).toBeInTheDocument()
     expect(await heading('Email verified')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login')
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login')
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, init] = fetchMock.mock.calls[0]
@@ -47,7 +43,7 @@ describe('verify email page', () => {
     expect(await heading('Link expired')).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent('expired')
     expect(screen.getByRole('link', { name: 'Sign up again' })).toHaveAttribute('href', '/register')
-    expect(screen.getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login')
+    expect(within(screen.getByRole('main')).getByRole('link', { name: 'Log in' })).toHaveAttribute('href', '/login')
   })
 
   test('shows a recoverable message for an invalid link', async () => {

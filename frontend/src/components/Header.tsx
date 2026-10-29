@@ -1,11 +1,13 @@
 import { useState } from 'react'
-import { Link, NavLink } from 'react-router'
+import { Link, NavLink, useNavigate } from 'react-router'
+import { useAuth } from '../lib/authContext.ts'
 
-const links = [
-  { to: '/', label: 'Home' },
+const publicLinks = [
   { to: '/login', label: 'Log in' },
   { to: '/register', label: 'Sign up' },
 ]
+
+const privateLinks = [{ to: '/', label: 'Home' }]
 
 function navClass({ isActive }: { isActive: boolean }) {
   return [
@@ -16,8 +18,50 @@ function navClass({ isActive }: { isActive: boolean }) {
   ].join(' ')
 }
 
+const logoutClass =
+  'block w-full rounded-md px-3 py-2 text-left text-sm font-medium text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 disabled:opacity-60 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white'
+
 function Header() {
+  const { status, logout } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [loggingOut, setLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState('')
+
+  const authenticated = status === 'authenticated'
+  // While the session is being checked, show no auth-dependent links.
+  const links = authenticated ? privateLinks : status === 'anonymous' ? publicLinks : []
+
+  async function handleLogout() {
+    setOpen(false)
+    setLogoutError('')
+    setLoggingOut(true)
+    const res = await logout()
+    setLoggingOut(false)
+    if (res.ok) navigate('/login', { replace: true })
+    else setLogoutError(`Could not log out: ${res.error}`)
+  }
+
+  function navItems(onPick?: () => void) {
+    return (
+      <>
+        {links.map((l) => (
+          <li key={l.to}>
+            <NavLink to={l.to} end className={navClass} onClick={onPick}>
+              {l.label}
+            </NavLink>
+          </li>
+        ))}
+        {authenticated && (
+          <li>
+            <button type="button" className={logoutClass} disabled={loggingOut} onClick={() => void handleLogout()}>
+              {loggingOut ? 'Logging out…' : 'Log out'}
+            </button>
+          </li>
+        )}
+      </>
+    )
+  }
 
   return (
     <header className="border-b border-gray-200 dark:border-gray-800">
@@ -27,15 +71,7 @@ function Header() {
         </Link>
 
         <nav className="hidden sm:block" aria-label="Main">
-          <ul className="flex gap-1">
-            {links.map((l) => (
-              <li key={l.to}>
-                <NavLink to={l.to} end className={navClass}>
-                  {l.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+          <ul className="flex gap-1">{navItems()}</ul>
         </nav>
 
         <button
@@ -54,16 +90,14 @@ function Header() {
 
       {open && (
         <nav id="mobile-nav" className="border-t border-gray-200 px-4 py-2 sm:hidden dark:border-gray-800" aria-label="Main">
-          <ul className="flex flex-col gap-1">
-            {links.map((l) => (
-              <li key={l.to}>
-                <NavLink to={l.to} end className={navClass} onClick={() => setOpen(false)}>
-                  {l.label}
-                </NavLink>
-              </li>
-            ))}
-          </ul>
+          <ul className="flex flex-col gap-1">{navItems(() => setOpen(false))}</ul>
         </nav>
+      )}
+
+      {logoutError && (
+        <p role="alert" className="mx-auto max-w-5xl px-4 pb-3 text-sm text-red-600 sm:px-6 dark:text-red-400">
+          {logoutError}
+        </p>
       )}
     </header>
   )
