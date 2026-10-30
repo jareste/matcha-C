@@ -112,6 +112,11 @@ function Login() {
       </form>
 
       <p className="mt-6 text-sm">
+        <Link to="/forgot-password" className="font-medium text-brand hover:underline">
+          Forgot your password?
+        </Link>
+      </p>
+      <p className="mt-2 text-sm">
         No account yet?{' '}
         <Link to="/register" className="font-medium text-brand hover:underline">
           Sign up

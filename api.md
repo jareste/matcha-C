@@ -18,6 +18,8 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 | POST | `/api/register` | — |
 | POST | `/api/login` | — |
 | POST | `/api/verify-email` | — |
+| POST | `/api/forgot-password` | — |
+| POST | `/api/reset-password` | — |
 | GET | `/api/validate` | ✔ |
 | POST | `/api/logout` | ✔ |
 | GET | `/api/profile/get` | ✔ |
@@ -69,6 +71,31 @@ Called by the frontend page `/verify-email?token=<token>`, which is the link sen
 - **400** `Token is required` · `Invalid token` (unknown or already used)
 - **410** `Token expired`
 - **500** `Failed to verify email`
+
+### POST `/api/forgot-password` (proposed, not implemented yet)
+
+Called by the frontend page `/forgot-password`. Sends an email containing the link `/reset-password?token=<token>`. Tokens are single-use and expire.
+
+```json
+{"email": ""}
+```
+
+- **200** `{"success": true, "message": "If the email exists, a reset link was sent"}` — **same answer whether or not the email is registered**, to avoid revealing account existence. The frontend also hides `Email not found` if the backend ever returns it.
+- **400** `Invalid JSON` · `Email is required`
+- **500** `Failed to send email`
+
+### POST `/api/reset-password` (proposed, not implemented yet)
+
+Called by the frontend page `/reset-password?token=<token>`. Replaces the password and invalidates the token (and ideally existing sessions).
+
+```json
+{"token": "", "password": ""}
+```
+
+- **200** `{"success": true, "message": "Password updated"}`
+- **400** `Token is required` · `Invalid token` (unknown or already used) · `Password is required` · `Password too weak` (any message containing "password" is shown on the field)
+- **410** `Token expired`
+- **500** `Failed to reset password`
 
 ### GET `/api/validate`
 
@@ -211,4 +238,5 @@ Raw WebSocket. Connects, no handlers.
 - `/api/auth/*` naming
 - 401 vs 403 vs 400
 - `/api/verify-email` contract (frontend relies on 400 = invalid, 410 = expired)
+- `/api/forgot-password` + `/api/reset-password` contract (frontend pages exist, backend pending: issue #12 cannot be verified end to end until then)
 - CSRF, date format (ISO 8601?), pagination
