@@ -57,7 +57,9 @@ would break the plain dev listener.
 | POST | `/api/logout` | ✔ | — |
 | GET | `/api/profile/get` | ✔ | — |
 | POST · PATCH | `/api/profile/update` | ✔ | JSON |
+| GET | `/api/tags/get` | ✔ | — |
 | POST | `/api/tags/insert` | ✔ | JSON |
+| POST | `/api/tags/delete` | ✔ | JSON |
 | POST | `/api/pics/insert` | ✔ | multipart |
 | GET | `/api/pics/get` | ✔ | query |
 | POST | `/api/pics/set_profile` | ✔ | JSON |
@@ -156,7 +158,7 @@ Called by the frontend page `/reset-password?token=<token>`. Replaces the passwo
     "id": 1, "username": "", "first_name": "", "last_name": "", "email": "",
     "bio": "", "location": "secretito", "fame_rating": 0, "last_online": "never",
     "email_verified": false,
-    "tags": ["music"],
+    "tags": [{"id": 1, "name": "Music"}],
     "pictures": [{"id": 12, "is_profile": true}, {"id": 13, "is_profile": false}]
   }
   ```
@@ -166,6 +168,10 @@ Called by the frontend page `/reset-password?token=<token>`. Replaces the passwo
 `pictures` gives ids, not file paths — fetch the bytes from
 `/api/pics/get?id=<id>`. Exactly one entry has `is_profile: true` whenever the
 user has any pictures. `location` is still a hard-coded placeholder.
+
+`tags` gives `{id, name}` objects. It used to be an array of bare names, which
+could neither be posted back to `/api/tags/insert` (it takes ids) nor matched
+against `/api/tags/get`.
 
 ### POST · PATCH `/api/profile/update`
 
@@ -183,16 +189,80 @@ All fields optional, others ignored. An empty object is accepted as a no-op.
 
 ## Tags
 
+### GET `/api/tags/get`
+
+The whole tag catalogue, which is what `/api/tags/insert` ids refer to.
+
+- **200**
+
+  ```json
+  {"tags": [{"id": 1, "name": "Music"}, {"id": 2, "name": "Movies"}]}
+  ```
+
+- **500** `Failed to retrieve tags`
+
+The rows come from `db_ttag_insert_default_tags()`, which runs on every start
+and is idempotent because `name` is unique — 21 tags: Music, Movies, Sports,
+Travel, Food, Art, Technology, Gaming, Fitness, Books, Photography, Dancing,
+Cooking, Hiking, Fashion, Writing, Yoga, Meditation, Crafts, Volunteering,
+Gardening. `id` comes from a sequence, so a client has to read it here rather
+than assume it: on a database recreated from scratch (`make fclean`) the names
+are the same but the ids need not be. `name` is at most 32 characters. There is
+no route to create a tag, and `user_tags` rows are constrained to real tags and
+real users (`ON DELETE CASCADE`), so a deleted user or tag takes its mappings
+with it.
+
 ### POST `/api/tags/insert`
 
 ```json
 {"tags": [1, 4, 7]}
 ```
 
-Tag IDs. Invalid ones are silently skipped.
+Tag ids, as listed by `/api/tags/get`. The request describes the tags the
+caller wants, so it is idempotent: an id the user already has is counted in
+`already_present` instead of failing, and repeats inside one array count once.
 
-- **200** `{"message": "Tags successfully added"}`
-- **400** `tags is required` (missing, or not an array)
+- **200**
+
+  ```json
+  {"success": true, "added": 2, "already_present": 1,
+   "tags": [{"id": 1, "name": "Music"}, {"id": 4, "name": "Travel"}]}
+  ```
+
+  `tags` is the caller's whole set after the write, in the same shape as
+  `/api/profile/get`, so a tag editor needs no follow-up request.
+
+- **400** `tags is required` (missing, or not an array) ·
+  `tags must not be empty` · `tags must contain positive integer ids` ·
+  `tags takes at most 32 ids` · `Unknown tag id <N>`
+- **500** `Failed to add tags` · `Failed to retrieve tags`
+
+Every id is validated against the catalogue before anything is written, and the
+first bad one is named in the error. `400` rather than `404` for an unknown id:
+the ids arrive as a list inside the body, so the route itself is found and only
+the body is wrong — unlike `/api/pics/*`, where the id *is* the resource being
+addressed.
+
+### POST `/api/tags/delete`
+
+```json
+{"tags": [1, 4]}
+```
+
+Same body, same validation and the same `400` set as `/api/tags/insert`.
+Removing a tag the caller does not have is a no-op, counted in `not_present`.
+
+- **200**
+
+  ```json
+  {"success": true, "removed": 1, "not_present": 1,
+   "tags": [{"id": 4, "name": "Travel"}]}
+  ```
+
+- **500** `Failed to remove tags` · `Failed to retrieve tags`
+
+It only ever touches the caller's own rows: deleting a tag another user has
+answers `200` with `removed: 0`.
 
 ---
 
@@ -323,10 +393,23 @@ Raw WebSocket. Connects, no handlers.
 - `/api/chat/messages?id=abc` answers `200 {"messages": []}` instead of `400`
   (`atoi` turns it into 0).
 - `/api/profile/update` accepts an empty object as a successful no-op.
-- No endpoint lists tags, so `/api/tags/insert` ids have to be known in advance.
 
 ### Fixed since the last revision of this document
 
+- `GET /api/tags/get` lists the catalogue, so `/api/tags/insert` ids no longer
+  have to be known in advance, and `/api/profile/get` returns the caller's tags
+  as `{id, name}` objects instead of bare names.
+- `/api/tags/insert` validates the ids instead of answering
+  `200 "Tags successfully added"` whatever happened, and reports what it did.
+  An unknown id used to be written into `user_tags` as a row naming a tag that
+  does not exist, invisible to every read path, because the table had no
+  foreign key; it now has one (`ON DELETE CASCADE` on both columns, added at
+  startup together with a one-time cleanup of the rows the old code wrote).
+- `POST /api/tags/delete` exists, so a tag can be removed again.
+- The default tags are seeded by `db_ttag_init()`, after it creates the table,
+  rather than from `db_init()`, which runs before any table exists: on a brand
+  new database the catalogue used to stay empty until the server was restarted
+  once.
 - `Access-Control-Allow-Origin` is no longer hard-coded to
   `http://localhost:8000`. The `Origin` header is now parsed before the route
   lookup, so the router-level `400` / `404` / `500` echo it too, and

@@ -1,4 +1,5 @@
 #include "db_table_tag.h"
+#include "../../log/log_api.h"
 #include "../../../inc/ft_malloc.h"
 #include <stdio.h>
 #include <string.h>
@@ -29,6 +30,35 @@ static const tableSchema_t m_user_tags_schema =
     .columns= (columnDef_t*)m_user_tags_cols
 };
 
+static void m_user_tags_add_constraints(DB_ID DB)
+{
+    static const char* const stmts[] =
+    {
+        "DELETE FROM user_tags ut "
+        "WHERE NOT EXISTS (SELECT 1 FROM tags t WHERE t.id = ut.tag_id);",
+
+        "DELETE FROM user_tags ut "
+        "WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = ut.user_id);",
+
+        "DO $$ BEGIN "
+        "ALTER TABLE user_tags ADD CONSTRAINT user_tags_tag_id_fkey "
+        "FOREIGN KEY (tag_id) REFERENCES tags(id) ON DELETE CASCADE; "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$;",
+
+        "DO $$ BEGIN "
+        "ALTER TABLE user_tags ADD CONSTRAINT user_tags_user_id_fkey "
+        "FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE; "
+        "EXCEPTION WHEN duplicate_object THEN NULL; END $$;"
+    };
+    size_t i;
+
+    for (i = 0; i < sizeof(stmts) / sizeof(*stmts); i++)
+    {
+        if (db_execute(DB, stmts[i], 0, NULL) != 0)
+            log_msg(LOG_LEVEL_WARN, "user_tags constraint step %zu failed\n", i);
+    }
+}
+
 int db_ttag_init(DB_ID DB)
 {
     if (db_gen_create_table(DB, &m_tags_schema) != 0)
@@ -36,6 +66,10 @@ int db_ttag_init(DB_ID DB)
 
     if (db_gen_create_table(DB, &m_user_tags_schema) != 0)
         return ERROR;
+
+    db_ttag_insert_default_tags(DB);
+
+    m_user_tags_add_constraints(DB);
 
     return SUCCESS;
 }

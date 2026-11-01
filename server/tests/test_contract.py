@@ -90,6 +90,8 @@ def auth(creds):
     ("POST",   "/api/profile/get"),
     ("POST",   "/api/chat"),
     ("GET",    "/api/pics/insert"),
+    ("POST",   "/api/tags/get"),
+    ("GET",    "/api/tags/delete"),
 ])
 def test_wrong_method_is_405_and_server_survives(auth, method, path):
     r = auth.request(method, f"{BASE_URL}{path}")
@@ -131,11 +133,139 @@ def test_tags_requires_an_array(auth):
     assert auth.post(f"{BASE_URL}/api/tags/insert", json={"tags": [1, 2]}).status_code == 200
 
 
+def test_tags_are_listed_with_their_ids(auth):
+    r = auth.get(f"{BASE_URL}/api/tags/get")
+    assert r.status_code == 200, r.text
+    tags = r.json()["tags"]
+    assert len(tags) > 0
+    assert all(isinstance(t["id"], int) and isinstance(t["name"], str) for t in tags)
+    assert len({t["id"] for t in tags}) == len(tags)
+
+
+@pytest.fixture
+def tagless():
+    """A session for a user with no tags of their own."""
+    u = "tg_" + _rand()
+    s = new_session()
+    assert s.post(f"{BASE_URL}/api/register", json={
+        "username": u, "email": f"{u}@example.com", "password": "C0ntract!",
+        "first_name": "Ta", "last_name": "Gs"}).status_code == 201
+    assert s.post(f"{BASE_URL}/api/login",
+                  json={"email": f"{u}@example.com",
+                        "password": "C0ntract!"}).status_code == 200
+    return s
+
+
+def _catalogue(s):
+    return s.get(f"{BASE_URL}/api/tags/get").json()["tags"]
+
+
+def test_insert_reports_what_it_did_and_is_idempotent(tagless):
+    picked = _catalogue(tagless)[:3]
+    ids = [t["id"] for t in picked]
+
+    r = tagless.post(f"{BASE_URL}/api/tags/insert", json={"tags": ids})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    # It used to answer "Tags successfully added" whatever happened.
+    assert body["added"] == 3 and body["already_present"] == 0
+    assert body["tags"] == picked
+
+    # Asking again is not an error, and must not add a second row.
+    r = tagless.post(f"{BASE_URL}/api/tags/insert", json={"tags": ids})
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["added"] == 0 and body["already_present"] == 3
+    assert body["tags"] == picked
+
+    # The echoed set is the one the profile reports.
+    assert tagless.get(f"{BASE_URL}/api/profile/get").json()["tags"] == picked
+
+
+def test_repeats_inside_one_request_count_once(tagless):
+    tag = _catalogue(tagless)[0]
+    r = tagless.post(f"{BASE_URL}/api/tags/insert",
+                     json={"tags": [tag["id"]] * 4})
+    assert r.status_code == 200, r.text
+    assert r.json()["added"] == 1
+    assert r.json()["tags"] == [tag]
+
+
+def test_unknown_tag_id_is_refused_and_writes_nothing(tagless):
+    # It answered 200 and wrote a user_tags row naming a tag that does not
+    # exist -- user_tags had no foreign key, and no read path ever showed it.
+    before = tagless.get(f"{BASE_URL}/api/profile/get").json()["tags"]
+    r = tagless.post(f"{BASE_URL}/api/tags/insert", json={"tags": [999999]})
+    assert r.status_code == 400, r.text
+    assert "999999" in r.text
+    assert tagless.get(f"{BASE_URL}/api/profile/get").json()["tags"] == before
+
+
+@pytest.mark.parametrize("body", [
+    {"tags": ["music"]},
+    {"tags": [0]},
+    {"tags": [-3]},
+    {"tags": [1.5]},
+    {"tags": [None]},
+    {"tags": []},
+    {"tags": list(range(1, 34))},
+])
+def test_insert_refuses_a_body_it_cannot_act_on(tagless, body):
+    r = tagless.post(f"{BASE_URL}/api/tags/insert", json=body)
+    assert r.status_code == 400, r.text
+
+
+def test_delete_removes_a_tag_and_is_idempotent(tagless):
+    tag = _catalogue(tagless)[1]
+    assert tagless.post(f"{BASE_URL}/api/tags/insert",
+                        json={"tags": [tag["id"]]}).status_code == 200
+
+    r = tagless.post(f"{BASE_URL}/api/tags/delete", json={"tags": [tag["id"]]})
+    assert r.status_code == 200, r.text
+    assert r.json()["removed"] == 1
+    assert tag not in r.json()["tags"]
+
+    r = tagless.post(f"{BASE_URL}/api/tags/delete", json={"tags": [tag["id"]]})
+    assert r.status_code == 200, r.text
+    assert r.json()["removed"] == 0 and r.json()["not_present"] == 1
+
+    assert tag not in tagless.get(f"{BASE_URL}/api/profile/get").json()["tags"]
+
+
+def test_delete_refuses_an_unknown_id(tagless):
+    r = tagless.post(f"{BASE_URL}/api/tags/delete", json={"tags": [999999]})
+    assert r.status_code == 400, r.text
+
+
+def test_one_users_tags_are_their_own(tagless, auth):
+    mine = _catalogue(tagless)[-1]
+    assert tagless.post(f"{BASE_URL}/api/tags/insert",
+                        json={"tags": [mine["id"]]}).status_code == 200
+    r = auth.post(f"{BASE_URL}/api/tags/delete", json={"tags": [mine["id"]]})
+    assert r.status_code == 200
+    assert r.json()["removed"] == 0
+    assert mine in tagless.get(f"{BASE_URL}/api/profile/get").json()["tags"]
+
+
+def test_a_listed_id_can_be_posted_back_and_comes_back_on_the_profile(auth):
+    """The round trip the listing exists for: list -> insert -> profile."""
+    catalogue = auth.get(f"{BASE_URL}/api/tags/get").json()["tags"]
+    picked = catalogue[2]
+
+    assert auth.post(f"{BASE_URL}/api/tags/insert",
+                     json={"tags": [picked["id"]]}).status_code == 200
+
+    mine = auth.get(f"{BASE_URL}/api/profile/get").json()["tags"]
+    # Objects, not bare names: a name alone cannot be posted back to
+    # /api/tags/insert, and could not be matched against the catalogue.
+    assert picked in mine, mine
+
+
 # --------------------------------------------------------------------------
 # Auth and query preconditions.
 # --------------------------------------------------------------------------
 def test_unauthenticated_is_rejected():
-    for path in ("/api/validate", "/api/profile/get", "/api/chat"):
+    for path in ("/api/validate", "/api/profile/get", "/api/chat", "/api/tags/get"):
         assert new_session().get(f"{BASE_URL}{path}").status_code in (401, 403), path
 
 
