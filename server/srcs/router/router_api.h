@@ -26,7 +26,6 @@ typedef struct
     char* username;
     char* email;
 
-    /* Owned by the router: the Origin header of this request, never NULL. */
     char* origin;
     cJSON* json;
 } http_request_ctx_t;

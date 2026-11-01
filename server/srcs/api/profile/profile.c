@@ -120,6 +120,7 @@ void profile_get_user(void* _ctx, void *user_data)
     char* response;
     cJSON* json_response;
     cJSON* json_tags;
+    cJSON* json_tag;
     cJSON* json_pics;
     cJSON* entry;
     tag_t_array* tags;
@@ -179,7 +180,10 @@ void profile_get_user(void* _ctx, void *user_data)
         json_tags = cJSON_CreateArray();
         for (i = 0; i < tags->count; i++)
         {
-            cJSON_AddItemToArray(json_tags, cJSON_CreateString(tags->tags[i]->name));
+            json_tag = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json_tag, "id", tags->tags[i]->id);
+            cJSON_AddStringToObject(json_tag, "name", tags->tags[i]->name);
+            cJSON_AddItemToArray(json_tags, json_tag);
         }
         cJSON_AddItemToObject(json_response, "tags", json_tags);
     }

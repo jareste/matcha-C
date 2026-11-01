@@ -138,8 +138,5 @@ int db_init(DB_ID* DB, char* host, char* port,\
     if (*DB == INVALID_DB_ID)
         return ERROR;
 
-    /* Initialize default tags */
-    db_ttag_insert_default_tags(*DB);
-
     return SUCCESS;
 }
