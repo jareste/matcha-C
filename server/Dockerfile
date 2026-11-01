@@ -35,7 +35,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY --from=builder /app/matCha /app/matCha
-COPY --from=builder /app/config /app/config
+
+COPY --from=builder /app/config.example /app/config
 
 COPY --from=builder /app/certs /app/certs
 COPY entrypoint.sh /entrypoint.sh

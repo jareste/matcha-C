@@ -18,6 +18,11 @@ typedef struct
 
 typedef struct
 {
+    char* TOKEN_SECRET;
+} auth_config;
+
+typedef struct
+{
     char* DB_HOST;
     char* DB_PORT;
     char* DB_USER;
@@ -31,5 +36,6 @@ void parse_free_config();
 void parse_set_log_config(log_config* log);
 void parse_set_ssl_config(ssl_config* ssl);
 void parse_set_db_config(db_config* db);
+void parse_set_auth_config(auth_config* auth);
 
 #endif /* CONFIG_FILE_H */
