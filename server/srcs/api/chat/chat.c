@@ -23,7 +23,7 @@ void chat_get_u_chats(void* req_ctx, void* user_data)
     
     log_msg(LOG_LEVEL_DEBUG, "Chat message request from fd=%d\n", ctx->fd);
     
-    router_http_generate_response(ctx->fd, CODE_200_OK, response, NULL);
+    router_http_generate_response(ctx->fd, CODE_200_OK, response, ctx->origin);
 }
 
 /* Get user specific chat */
@@ -62,7 +62,7 @@ void chat_get_u_chat(void* req_ctx, void* user_data)
     if (!messages)
     {
         log_msg(LOG_LEVEL_ERROR, "Failed to retrieve messages from database\n");
-        router_http_generate_response(ctx->fd, CODE_404_NOT_FOUND, "{\"error\": \"Requested chat not found\"}", NULL);
+        router_http_generate_response(ctx->fd, CODE_404_NOT_FOUND, "{\"error\": \"Requested chat not found\"}", ctx->origin);
         return;
     }
     log_msg(LOG_LEVEL_DEBUG, "Retrieved %zu messages from database\n", messages->count);
@@ -88,7 +88,7 @@ void chat_get_u_chat(void* req_ctx, void* user_data)
 
     response = cJSON_PrintUnformatted(json_response);
 
-    router_http_generate_response(ctx->fd, CODE_200_OK, response, NULL);
+    router_http_generate_response(ctx->fd, CODE_200_OK, response, ctx->origin);
 
     cJSON_Delete(json_response);
     free(response);

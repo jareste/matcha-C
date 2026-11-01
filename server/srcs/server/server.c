@@ -31,6 +31,9 @@
 #define WS_MAX_PAYLOAD (1 * 1024 * 1024)
 #define WS_RX_MAX      (WS_MAX_PAYLOAD + 4096)
 
+#define HTTP_MAX_BODY  (8 * 1024 * 1024)
+#define HTTP_RX_MAX    (HTTP_MAX_BODY + (4 * 1024 * 1024))
+
 /*
 // #define REMOVE_CLIENT(fd)                                  \
 //   do {                                                     \
@@ -446,7 +449,7 @@ static void m_do_sio_ws_handshake(int fd, const char *req, client_t *c)
     char* username = NULL;
     char* email = NULL;
     int uid = 0;
-    char* origin = strdup("http://localhost:8000"); /* TODO make it properly */
+    char* origin = get_header_value(req, "Origin"); /* NULL -> no CORS header */
 
     if (validate_cookies(fd, req, &username, &email, &uid, origin) == ERROR)
     {
@@ -621,6 +624,31 @@ static int client_read_into_buffer(client_t *c, size_t max_size, bool *peer_clos
     return SUCCESS;
 }
 
+/* Answers 413 on fd and reports it, for a body we are not willing to buffer. */
+static void m_http_reject_too_large(int fd, size_t content_len)
+{
+    static const char body[] = "{\"error\":\"Request body too large\"}";
+    char header[256];
+    int header_len;
+
+    log_msg(LOG_LEVEL_WARN, "Rejecting %zu-byte body on fd=%d (limit %d)\n",
+            content_len, fd, HTTP_MAX_BODY);
+
+    header_len = snprintf(header, sizeof(header),
+        "HTTP/1.1 413 Content Too Large\r\n"
+        "Content-Type: application/json\r\n"
+        "Access-Control-Allow-Origin: *\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: close\r\n\r\n",
+        sizeof(body) - 1);
+
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header))
+        return;
+
+    conn_writev2(fd, header, header_len, body, sizeof(body) - 1);
+}
+
+/* Returns 1 for a complete request, 0 while incomplete, -1 if it is too big. */
 static int http_try_get_complete_request(const char *buf, size_t len, size_t *request_len)
 {
     char *headers_end;
@@ -647,6 +675,9 @@ static int http_try_get_complete_request(const char *buf, size_t len, size_t *re
         content_len = (size_t)strtoul(p, NULL, 10);
     }
 
+    if (content_len > HTTP_MAX_BODY)
+        return -1;
+
     if (len < header_len + content_len)
         return 0;
 
@@ -663,7 +694,10 @@ static int handle_http_buffer(client_t *c)
     {
         ret = http_try_get_complete_request(c->rx_buf, c->rx_len, &req_len);
         if (ret < 0)
+        {
+            m_http_reject_too_large(c->fd, c->rx_len);
             return ERROR;
+        }
         if (ret == 0)
             break;
 
@@ -798,7 +832,7 @@ int m_handle_client_event(int fd)
     }
 
     log_msg(LOG_LEVEL_DEBUG, "Handling client event for fd=%d in HTTP state\n", fd);
-    if (client_read_into_buffer(c, 4 * 1024 * 1024, &peer_closed) != SUCCESS)
+    if (client_read_into_buffer(c, HTTP_RX_MAX, &peer_closed) != SUCCESS)
     {
         REMOVE_CLIENT(fd);
         log_msg(LOG_LEVEL_INFO, "Read failure on fd=%d\n", fd);
@@ -820,6 +854,19 @@ int m_handle_client_event(int fd)
     {
         if (!m_ws_drain_frames(c))
             return SUCCESS;
+    }
+
+    /*
+     * A response too big for the socket buffer stays queued in the conn layer,
+     * and the loop only drains it on EPOLLOUT, which nothing asked for here,
+     * so the tail was simply never written. Harmless while every response was
+     * a short JSON object but now picture downloads are large enough
+     * to hit it.
+     */
+    if (conn_has_pending_tx(fd))
+    {
+        m_epoll_arm(fd, true);
+        return SUCCESS;
     }
 
     if (peer_closed)

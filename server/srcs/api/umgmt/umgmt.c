@@ -20,13 +20,19 @@ DB_ID get_db_id();
  * api_umgmt_init(), so these handlers start at their actual business logic.
  */
 
+static const char* m_cookie_secure_attr(void)
+{
+    return conn_layer_mode() == CONN_MODE_TLS ? "; Secure" : "";
+}
+
 static void m_send_token_cookie(http_request_ctx_t* ctx, HTTP_response_code_t code,
                                 const char* body, const char* token)
 {
     char extra[1280];
 
     snprintf(extra, sizeof(extra),
-             "Set-Cookie: token=%s; HttpOnly; Path=/; SameSite=Strict\r\n", token);
+             "Set-Cookie: token=%s; HttpOnly; Path=/; SameSite=Strict%s\r\n",
+             token, m_cookie_secure_attr());
 
     router_http_respond_ex(ctx->fd, code, body, ctx->origin, extra);
 }
@@ -185,13 +191,17 @@ cleanup:
 void api_umgmt_logout(void* _ctx, void *user_data)
 {
     http_request_ctx_t* ctx = (http_request_ctx_t*)_ctx;
+    char extra[256];
 
     (void)user_data;
 
+    snprintf(extra, sizeof(extra),
+             "Set-Cookie: token=deleted; HttpOnly; Path=/; SameSite=Strict%s; "
+             "Expires=Thu, 01 Jan 1970 00:00:00 GMT\r\n",
+             m_cookie_secure_attr());
+
     router_http_respond_ex(ctx->fd, CODE_200_OK,
-        "{\"success\":true, \"message\":\"Logged out\"}", ctx->origin,
-        "Set-Cookie: token=deleted; HttpOnly; Path=/; SameSite=Strict; "
-        "Expires=Thu, 01 Jan 1970 00:00:00 GMT\r\n");
+        "{\"success\":true, \"message\":\"Logged out\"}", ctx->origin, extra);
 
     log_msg(LOG_LEVEL_DEBUG, "User logged out successfully\n");
 }

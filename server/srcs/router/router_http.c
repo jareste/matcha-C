@@ -55,6 +55,9 @@ static const char* m_http_code_to_status_text(HTTP_response_code_t code)
         case CODE_403_FORBIDDEN: return "Forbidden";
         case CODE_404_NOT_FOUND: return "Not Found";
         case CODE_405_METHOD_NOT_ALLOWED: return "Method Not Allowed";
+        case CODE_409_CONFLICT: return "Conflict";
+        case CODE_413_CONTENT_TOO_LARGE: return "Content Too Large";
+        case CODE_415_UNSUPPORTED_MEDIA_TYPE: return "Unsupported Media Type";
         case CODE_500_INTERNAL_SERVER_ERROR: return "Internal Server Error";
         case CODE_503_SERVICE_UNAVAILABLE: return "Service Unavailable";
         default: return "Unknown";
@@ -88,17 +91,83 @@ char* get_header_value(const char *req, const char *key)
     return out;
 }
 
+static void m_build_cors_headers(const char* origin, char* out, size_t out_size,
+                                 bool with_methods)
+{
+    int n;
+
+    out[0] = '\0';
+    if (!origin || !*origin)
+        return;
+
+    n = snprintf(out, out_size,
+        "Access-Control-Allow-Origin: %s\r\n"
+        "Access-Control-Allow-Credentials: true\r\n"
+        "%s",
+        origin,
+        with_methods
+            ? "Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n"
+              "Access-Control-Allow-Headers: Content-Type\r\n"
+            : "");
+
+    if (n <= 0 || (size_t)n >= out_size)
+    {
+        log_msg(LOG_LEVEL_ERROR, "Origin too long for CORS header, omitting it\n");
+        out[0] = '\0';
+    }
+}
+
+int router_http_respond_binary(int fd, HTTP_response_code_t code,
+                               const void* body, size_t body_len,
+                               const char* content_type, const char* origin)
+{
+    char header[1024];
+    char cors[512];
+    const char* status_text;
+    int header_len;
+
+    if (!body || body_len == 0)
+        return ERROR;
+
+    m_build_cors_headers(origin, cors, sizeof(cors), false);
+
+    if (!content_type)
+        content_type = "application/octet-stream";
+
+    status_text = m_http_code_to_status_text(code);
+
+    header_len = snprintf(header, sizeof(header),
+        "HTTP/1.1 %d %s\r\n"
+        "Content-Type: %s\r\n"
+        "%s"
+        "X-Content-Type-Options: nosniff\r\n"
+        "Content-Length: %zu\r\n"
+        "Connection: close\r\n\r\n",
+        code, status_text, content_type, cors, body_len);
+
+    if (header_len <= 0 || (size_t)header_len >= sizeof(header))
+    {
+        log_msg(LOG_LEVEL_ERROR, "Header formatting error for code %d\n", code);
+        return ERROR;
+    }
+
+    conn_writev2(fd, header, header_len, body, body_len);
+    log_msg(LOG_LEVEL_DEBUG, "Binary response sent to fd=%d with code %d (%zu bytes)\n",
+            fd, code, body_len);
+    return SUCCESS;
+}
+
 int router_http_respond_ex(int fd, HTTP_response_code_t code, const char* body,
                            const char* origin, const char* extra_headers)
 {
     char body_buf[128];
     char header[1024];
+    char cors[512];
     size_t body_len;
     const char* status_text;
     int header_len;
 
-    if (!origin)
-        origin = "http://localhost:8000";
+    m_build_cors_headers(origin, cors, sizeof(cors), true);
 
     if (!extra_headers)
         extra_headers = "";
@@ -109,11 +178,10 @@ int router_http_respond_ex(int fd, HTTP_response_code_t code, const char* body,
     {
         header_len = snprintf(header, sizeof(header),
             "HTTP/1.1 204 No Content\r\n"
-            "Access-Control-Allow-Origin: %s\r\n"
-            "Access-Control-Allow-Credentials: true\r\n"
+            "%s"
             "%s"
             "Connection: close\r\n\r\n",
-            origin, extra_headers);
+            cors, extra_headers);
 
         if (header_len <= 0 || (size_t)header_len >= sizeof(header))
         {
@@ -138,14 +206,11 @@ int router_http_respond_ex(int fd, HTTP_response_code_t code, const char* body,
     header_len = snprintf(header, sizeof(header),
         "HTTP/1.1 %d %s\r\n"
         "Content-Type: application/json\r\n"
-        "Access-Control-Allow-Origin: %s\r\n"
-        "Access-Control-Allow-Credentials: true\r\n"
-        "Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n"
-        "Access-Control-Allow-Headers: Content-Type\r\n"
+        "%s"
         "%s"
         "Content-Length: %zu\r\n"
         "Connection: close\r\n\r\n",
-        code, status_text, origin, extra_headers, body_len);
+        code, status_text, cors, extra_headers, body_len);
 
     if (header_len <= 0 || (size_t)header_len >= sizeof(header))
     {
@@ -286,19 +351,24 @@ static int router_validate_request_token(http_request_ctx_t* ctx, char* request,
 
 static void send_cors_preflight(int fd, const char *origin)
 {
-    char buf[512];
+    char buf[1024];
+    char cors[512];
     int n;
-    
+
+    m_build_cors_headers(origin, cors, sizeof(cors), true);
+
     n = snprintf(buf, sizeof(buf),
         "HTTP/1.1 204 No Content\r\n"
-        "Access-Control-Allow-Origin: %s\r\n"
-        "Access-Control-Allow-Methods: POST, OPTIONS\r\n"
-        "Access-Control-Allow-Headers: Content-Type\r\n"
-        "Access-Control-Allow-Credentials: true\r\n"
+        "%s"
         "Content-Length: 0\r\n"
         "\r\n",
-        origin
+        cors
     );
+    if (n <= 0 || (size_t)n >= sizeof(buf))
+    {
+        log_msg(LOG_LEVEL_ERROR, "CORS preflight header formatting error\n");
+        return;
+    }
     log_msg(LOG_LEVEL_DEBUG, "CORS preflight response: \n%s\n", buf);
     conn_write(fd, buf, n);
 }
@@ -486,6 +556,14 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     int rc;
     size_t len;
 
+    /*
+     * The Origin has to be read before anything is answered: the early
+     * 400/404/500 below are responses too, and they used to carry a
+     * hard-coded Access-Control-Allow-Origin because this header was only
+     * parsed after the route lookup. NULL means the request carried no
+     * Origin, and then no CORS header is emitted at all.
+     */
+    origin = get_header_value(request, "Origin");
 
     first_line_end = strstr(request, "\r\n");
     if (first_line_end)
@@ -519,21 +597,27 @@ int router_handle_http_request(int fd, const char* request, size_t request_len)
     }
 
     if (!route)
-        return router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}", NULL);
+    {
+        rc = router_http_generate_response(fd, CODE_400_BAD_REQUEST, "{\"error\": \"Bad Request\"}", origin);
+        free(origin);
+        return rc;
+    }
 
     route_entry = router_http_find(route);
     if (!route_entry)
     {
         log_msg(LOG_LEVEL_ERROR, "No route found for path: %s\n", route);
-        return router_http_generate_response(fd, CODE_404_NOT_FOUND, "{\"error\": \"Not Found\"}", NULL);
+        rc = router_http_generate_response(fd, CODE_404_NOT_FOUND, "{\"error\": \"Not Found\"}", origin);
+        free(origin);
+        return rc;
     }
 
     if (!route_entry->handler)
-        return router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}", NULL);
-
-    origin = get_header_value(request, "Origin");
-    if (!origin)
-        origin = strdup("http://localhost:8000");
+    {
+        rc = router_http_generate_response(fd, CODE_500_INTERNAL_SERVER_ERROR, "{\"error\": \"Internal Server Error\"}", origin);
+        free(origin);
+        return rc;
+    }
 
     if (!method)
     {
