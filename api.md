@@ -4,34 +4,69 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 
 ## Conventions
 
-- **Base URL:** `http://localhost:8080`
+- **Base URL:** `http://localhost:8080` (`make`), or `https://localhost:8443` (`make tls`, self-signed).
 - **Format:** JSON in and out. Errors are always `{"error": "..."}`.
-- **Auth:** `POST /api/login` sets the `token` cookie (`HttpOnly; SameSite=Strict`). Send requests with `credentials: "include"`.
-- **No cookie** on an auth route → `403 {"error": "Forbidden"}`. **Invalid token** → connection closed, no response.
-- **Unknown route** → `404 {"error": "Not Found"}`.
+- **Auth:** `POST /api/login` sets the `token` cookie (`HttpOnly; Path=/; SameSite=Strict`, plus `Secure` on a TLS listener). Send requests with `credentials: "include"`.
 - **Dates:** not unified yet. **Pagination:** none.
+
+### Central preconditions
+
+Every route declares what it needs at registration, and the router enforces it
+before the handler runs — so these answers are identical on every endpoint and
+are not repeated per route below. They are checked in this order:
+
+| Condition | Response |
+|---|---|
+| Unknown route | **404** `Not Found` |
+| `OPTIONS` (CORS preflight) | **204**, no body |
+| Auth route, no `token` cookie | **403** `Forbidden` |
+| Auth route, bad or expired token | **401** `Invalid or expired session` |
+| Method not allowed on the route | **405** `Method Not Allowed` |
+| Route needs a query string, none given | **400** `Missing query parameters` |
+| Route needs a body, none given | **400** `Request body is required` |
+| Route needs JSON, body does not parse | **400** `Invalid JSON` |
+| Body over 8 MB | **413** `Request body too large` |
+
+CORS: every response echoes the request's `Origin` in
+`Access-Control-Allow-Origin` and adds `Access-Control-Allow-Credentials: true`,
+including the router-level `400` / `404` / `405` / `500`. A request **without**
+an `Origin` header is not cross-origin, so it gets no CORS header at all.
+Preflight (`OPTIONS`) answers `204` with the same echoed origin plus
+`Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS` and
+`Access-Control-Allow-Headers: Content-Type`.
+
+The origin is echoed, not matched against an allowlist, so any site can read an
+authenticated response if the browser attaches the cookie — `SameSite=Strict`
+is what currently prevents that. See To agree on.
+
+The session cookie is `token=<jwt>; HttpOnly; Path=/; SameSite=Strict`, plus
+`Secure` when the listener is TLS. It is left off in plain-HTTP mode on
+purpose: a `Secure` cookie is dropped by the browser over `http://`, which
+would break the plain dev listener.
 
 ## Summary
 
-| Method | Path | Auth |
-|---|---|---|
-| POST | `/api/register` | — |
-| POST | `/api/login` | — |
-| POST | `/api/verify-email` | — |
-| POST | `/api/forgot-password` | — |
-| POST | `/api/reset-password` | — |
-| GET | `/api/validate` | ✔ |
-| POST | `/api/logout` | ✔ |
-| GET | `/api/profile/get` | ✔ |
-| POST | `/api/profile/update` | ✔ |
-| POST | `/api/tags/insert` | ✔ |
-| POST | `/api/pics/insert` | ✔ |
-| GET | `/api/pics/get` | ✔ |
-| GET | `/api/chat` | ✔ |
-| GET | `/api/chat/messages` | ✔ |
-| WS | `/socket.io/` | ✔ |
-| SIO | `send` event | ✔ |
-| WS | `/ws` | — |
+| Method | Path | Auth | Needs |
+|---|---|---|---|
+| POST | `/api/register` | — | JSON |
+| POST | `/api/login` | — | JSON |
+| POST | `/api/verify-email` | — | JSON · *not implemented* |
+| POST | `/api/forgot-password` | — | JSON · *not implemented* |
+| POST | `/api/reset-password` | — | JSON · *not implemented* |
+| GET | `/api/validate` | ✔ | — |
+| POST | `/api/logout` | ✔ | — |
+| GET | `/api/profile/get` | ✔ | — |
+| POST · PATCH | `/api/profile/update` | ✔ | JSON |
+| POST | `/api/tags/insert` | ✔ | JSON |
+| POST | `/api/pics/insert` | ✔ | multipart |
+| GET | `/api/pics/get` | ✔ | query |
+| POST | `/api/pics/set_profile` | ✔ | JSON |
+| POST | `/api/pics/delete` | ✔ | JSON |
+| GET | `/api/chat` | ✔ | — |
+| GET | `/api/chat/messages` | ✔ | query |
+| WS | `/socket.io/` | ✔ | — |
+| SIO | `send` event | ✔ | — |
+| WS | `/ws` | — | — |
 
 ---
 
@@ -44,8 +79,7 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 ```
 
 - **201** `{"success": true, "message": "Registration successful"}`
-- **400** `Invalid JSON` · `<Field> is required` · `Username already exists` · `Email already exists`
-- **405** `Method Not Allowed`
+- **400** `<field> is required` (lowercase field name) · `Username already exists` · `Email already exists`
 - **500** `Failed to register user`
 
 ### POST `/api/login`
@@ -55,9 +89,11 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 ```
 
 - **200** `{"success": true, "message": "Login successful"}` + `Set-Cookie: token=...`
-- **400** `Invalid JSON` · `Email is required` · `Password is required` · `Email not found` · `Invalid credentials`
-- **405** `Method Not Allowed`
+- **400** `Email is required` · `Password is required` · `Invalid credentials`
 - **500** `Failed to generate token`
+
+A wrong password and an unregistered email both answer `Invalid credentials`, so
+the endpoint cannot be used to test whether an account exists.
 
 ### POST `/api/verify-email` (proposed, not implemented yet)
 
@@ -81,7 +117,7 @@ Called by the frontend page `/forgot-password`. Sends an email containing the li
 ```
 
 - **200** `{"success": true, "message": "If the email exists, a reset link was sent"}` — **same answer whether or not the email is registered**, to avoid revealing account existence. The frontend also hides `Email not found` if the backend ever returns it.
-- **400** `Invalid JSON` · `Email is required`
+- **400** `Email is required`
 - **500** `Failed to send email`
 
 ### POST `/api/reset-password` (proposed, not implemented yet)
@@ -100,12 +136,10 @@ Called by the frontend page `/reset-password?token=<token>`. Replaces the passwo
 ### GET `/api/validate`
 
 - **200** `{"success": true, "message": "User is valid", "username": "<username>"}`
-- **405** `Method Not Allowed`
 
 ### POST `/api/logout`
 
-- **200** empty body, cookie cleared
-- **405** `Method Not Allowed`
+- **200** `{"success": true, "message": "Logged out"}` + `Set-Cookie: token=deleted; ... Expires=Thu, 01 Jan 1970 00:00:00 GMT`
 
 ---
 
@@ -121,22 +155,27 @@ Called by the frontend page `/reset-password?token=<token>`. Replaces the passwo
   {
     "id": 1, "username": "", "first_name": "", "last_name": "", "email": "",
     "bio": "", "location": "secretito", "fame_rating": 0, "last_online": "never",
-    "email_verified": false, "tags": ["music"], "pictures": ["/tmp/matCha/uploads/a.jpg"]
+    "email_verified": false,
+    "tags": ["music"],
+    "pictures": [{"id": 12, "is_profile": true}, {"id": 13, "is_profile": false}]
   }
   ```
 
-- **404** `User not found`
+- **404** `User not found` (also for a non-numeric `id`)
 
-### POST `/api/profile/update`
+`pictures` gives ids, not file paths — fetch the bytes from
+`/api/pics/get?id=<id>`. Exactly one entry has `is_profile: true` whenever the
+user has any pictures. `location` is still a hard-coded placeholder.
 
-All fields optional, others ignored.
+### POST · PATCH `/api/profile/update`
+
+All fields optional, others ignored. An empty object is accepted as a no-op.
 
 ```json
 {"first_name": "", "last_name": "", "email": "", "bio": ""}
 ```
 
 - **200** `{"success": true, "message": "Profile updated successfully"}`
-- **400** `No data provided` · `Invalid JSON`
 - **404** `User not found`
 - **500** `Failed to update profile`
 
@@ -153,26 +192,78 @@ All fields optional, others ignored.
 Tag IDs. Invalid ones are silently skipped.
 
 - **200** `{"message": "Tags successfully added"}`
-- **400** `Invalid JSON body` · `Invalid or missing 'tags' in request body`
+- **400** `tags is required` (missing, or not an array)
 
 ---
 
 ## Pictures
 
+Up to **5 pictures** per user, one of them the profile picture.
+
+Server-side rules, all in `api/pics/pics.c`:
+
+- The uploaded **filename is discarded**. The server generates the stored name
+  (`u<uid>_<epoch>_<16 hex>.<ext>`) and only that basename is persisted, so a
+  client can never influence where the file lands.
+- The **format is taken from the magic bytes**, not from the filename or the
+  part's `Content-Type`. PNG, JPEG, GIF and WebP only.
+- **5 MB per picture**, **5 pictures per user**.
+- The **first upload automatically becomes the profile picture**
+- Another user's picture answers **404**, never 403, so ids are not enumerable.
+
 ### POST `/api/pics/insert`
 
-`multipart/form-data` with one file.
+`multipart/form-data` with one file part. Any part carrying a `filename` is
+taken as the file; additional file parts are ignored. Other fields are ignored.
 
-- **200** `{"message": "Picture uploaded successfully"}`
-- **400** `Expected multipart/form-data` · `Missing boundary`
-- **500** `Failed to save picture`
+- **201** `{"id": 12, "is_profile": true}`
+- **400** `Expected multipart/form-data` · `Missing or malformed boundary` · `Malformed multipart body` · `No file part in the request`
+- **409** `At most 5 pictures; delete one first`
+- **413** `Picture larger than 5242880 bytes`
+- **415** `Only PNG, JPEG, GIF and WebP images are accepted`
+- **500** `Storage unavailable` · `Failed to store the picture` · `Failed to record the picture` · `Out of memory`
+
+The quota is checked before the body is parsed, so an over-quota upload is
+rejected without reading the file.
 
 ### GET `/api/pics/get?id=<picture_id>`
 
-- **200** raw image (`Content-Type: image/jpeg`)
+Any logged-in user may fetch any picture; they are profile content.
+
+- **200** raw image bytes, with the real `Content-Type`
+  (`image/png` · `image/jpeg` · `image/gif` · `image/webp`) and
+  `X-Content-Type-Options: nosniff`
 - **400** `Missing 'id' parameter` · `Invalid 'id' parameter`
-- **404** `Picture not found`
-- **500** `File missing on disk`
+- **404** `Picture not found` (unknown id, or the file is gone from disk)
+- **500** `Stored picture is unusable` · `Failed to read the picture` · `Out of memory`
+
+### POST `/api/pics/set_profile`
+
+```json
+{"id": 12}
+```
+
+Moves the profile flag onto that picture and clears it from the caller's others.
+Must be one of the caller's own pictures.
+
+- **200** `{"message": "Profile picture updated"}`
+- **400** `Expected a positive integer 'id'`
+- **404** `Picture not found` (unknown, or owned by someone else)
+- **500** `Failed to set the profile picture` · `Failed to read the existing pictures`
+
+### POST `/api/pics/delete`
+
+```json
+{"id": 12}
+```
+
+Removes the row and the file. If the deleted picture was the profile picture and
+others remain, the oldest remaining one is promoted.
+
+- **200** `{"message": "Picture deleted"}`
+- **400** `Expected a positive integer 'id'`
+- **404** `Picture not found` (unknown, or owned by someone else)
+- **500** `Failed to delete the picture`
 
 ---
 
@@ -194,7 +285,7 @@ Messages sent by me to that user.
   {"messages": [{"id": 1, "sender_id": 1, "recipient_id": 2, "content": "hi", "is_read": false, "timestamp": "Wed Oct 21 14:03:12 2026"}]}
   ```
 
-- **400** `Bad Request - Missing Query Parameters` · `Missing 'id' parameter`
+- **400** `Missing 'id' parameter`
 - **404** `Requested chat not found`
 
 ---
@@ -225,18 +316,41 @@ Raw WebSocket. Connects, no handlers.
 
 ## Known issues
 
-- Invalid token → no response (should be `401`).
-- `send` recipient is hard-coded to user 2.
-- No way to get a picture ID (profile returns file paths, upload returns nothing).
-- `/api/pics/get` without a query string crashes.
-- `/api/profile/get?id=` exposes other users' email.
-- Method not checked outside auth routes.
+- `/api/profile/get?id=` exposes other users' email. Spec subject says a profile
+  must show everything *except* the email address and password. -> we must fix this.
+- `send` recipient is hard-coded to user 2, so chat cannot be used end to end.
+- `location` is the hard-coded string `"secretito"`; GPS positioning is not implemented.
+- `/api/chat/messages?id=abc` answers `200 {"messages": []}` instead of `400`
+  (`atoi` turns it into 0).
+- `/api/profile/update` accepts an empty object as a successful no-op.
+- No endpoint lists tags, so `/api/tags/insert` ids have to be known in advance.
+
+### Fixed since the last revision of this document
+
+- `Access-Control-Allow-Origin` is no longer hard-coded to
+  `http://localhost:8000`. The `Origin` header is now parsed before the route
+  lookup, so the router-level `400` / `404` / `500` echo it too, and
+  `/api/profile/get`, `/api/chat` and `/api/chat/messages` pass `ctx->origin`
+  instead of `NULL`. With no `Origin` on the request, no CORS header is sent at
+  all rather than a made-up one.
+- The CORS preflight advertises the full method set, so a cross-origin
+  `PATCH /api/profile/update` is no longer blocked by the browser.
+- The `token` cookie carries `Secure` when the listener is TLS.
+- Invalid token now answers `401`, instead of closing the connection with no response.
+- `/api/pics/get` without a query string answers `400`, instead of crashing the process.
+- Method is now enforced on every route, not just the auth ones.
+- Picture ids are now reachable: `/api/pics/insert` returns the new id and
+  `/api/profile/get` lists ids.
+- `/api/login` no longer distinguishes an unknown email from a wrong password.
 
 ## To agree on
 
 - `GET /api/me` (or keep `/api/validate`)
 - `/api/auth/*` naming
-- 401 vs 403 vs 400
+- Whether a missing cookie should be `401` rather than `403` (a bad token is already `401`)
 - `/api/verify-email` contract (frontend relies on 400 = invalid, 410 = expired)
 - `/api/forgot-password` + `/api/reset-password` contract (frontend pages exist, backend pending: issue #12 cannot be verified end to end until then)
+- Whether the frontend downscales pictures before upload (the server stores and serves whatever it is given, at full size)
+- Whether `Access-Control-Allow-Origin` should be an allowlist (the configured
+  frontend origin) rather than an echo of whatever `Origin` arrives
 - CSRF, date format (ISO 8601?), pagination
