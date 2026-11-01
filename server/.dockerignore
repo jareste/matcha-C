@@ -19,3 +19,4 @@ cookies.pkl
 config
 .env
 .env.*
+uploads/

@@ -14,7 +14,7 @@ OBJ = $(addprefix $(OBJ_DIR)/, $(SRC:.c=.o))
 AR = ar rcs
 OBJ_DIR = objs
 
-CFLAGS += -I../../inc -I/usr/include/postgresql -I$(HOME)/postgresql/include -DPICS_DIR=\"/tmp/matCha/uploads\"
+CFLAGS += -I../../inc -I/usr/include/postgresql -I$(HOME)/postgresql/include -DPICS_DIR=\"uploads\"
 
 all: $(NAME)
 

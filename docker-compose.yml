@@ -38,9 +38,12 @@ services:
       SSL_ENABLE: "${SSL_ENABLE:-n}"
       CERT_PATH: certs/cert.pem
       KEY_PATH: certs/key.pem
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  uploads_data:

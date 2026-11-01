@@ -195,6 +195,67 @@ def test_options_preflight():
     assert r.headers.get("Access-Control-Allow-Origin") == "http://localhost:3000"
 
 
+@pytest.mark.parametrize("path", [
+    "/api/profile/get",
+    "/api/chat",
+    "/api/chat/messages?id=2",
+])
+def test_authenticated_get_echoes_the_origin(auth, path):
+    origin = "http://localhost:3000"
+    r = auth.get(f"{BASE_URL}{path}", headers={"Origin": origin})
+    assert r.headers.get("Access-Control-Allow-Origin") == origin
+    assert r.headers.get("Access-Control-Allow-Credentials") == "true"
+
+
+# The router-level errors are answered before the route is even known. The
+# Origin header used to be parsed after the route lookup, so these three
+# carried the hard-coded origin too.
+@pytest.mark.parametrize("path,status", [
+    ("/api/nope", 404),
+    ("/api/pics/get", 400),
+])
+def test_router_level_errors_echo_the_origin(auth, path, status):
+    origin = "http://localhost:3000"
+    r = auth.get(f"{BASE_URL}{path}", headers={"Origin": origin})
+    assert r.status_code == status
+    assert r.headers.get("Access-Control-Allow-Origin") == origin
+
+
+def test_no_origin_means_no_cors_header(auth):
+    # A request without an Origin is not cross-origin, so claiming it came from
+    # some fixed origin is simply wrong. Nothing CORS is emitted instead.
+    r = auth.get(f"{BASE_URL}/api/profile/get")
+    assert r.status_code == 200
+    assert "Access-Control-Allow-Origin" not in r.headers
+
+
+def test_preflight_advertises_every_method_it_routes():
+    # It advertised only "POST, OPTIONS", which blocks a cross-origin
+    # PATCH /api/profile/update even though the route accepts PATCH.
+    r = new_session().options(f"{BASE_URL}/api/profile/update",
+                              headers={"Origin": "http://localhost:3000",
+                                       "Access-Control-Request-Method": "PATCH"})
+    assert r.status_code in (200, 204)
+    allowed = r.headers.get("Access-Control-Allow-Methods", "")
+    assert "PATCH" in allowed and "GET" in allowed
+
+
+def test_token_cookie_is_secure_exactly_when_the_transport_is_tls(creds):
+    # The cookie had no Secure flag, so a TLS session's token was also sent
+    # over plain http://. Secure over http:// would instead make the browser
+    # drop it, so the flag has to follow the listener.
+    s = new_session()
+    r = s.post(f"{BASE_URL}/api/login",
+               json={"email": creds["email"], "password": creds["password"]})
+    assert r.status_code == 200
+    cookie = r.headers.get("Set-Cookie", "")
+    assert ("Secure" in cookie) is IS_TLS, cookie
+
+    r = s.post(f"{BASE_URL}/api/logout")
+    assert r.status_code == 200
+    assert ("Secure" in r.headers.get("Set-Cookie", "")) is IS_TLS
+
+
 # --------------------------------------------------------------------------
 # Concurrency. ~25% of parallel TLS requests used to get no response: the
 # handshake and the request arrived in one burst, and a buffered request was
