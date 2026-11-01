@@ -28,6 +28,8 @@ typedef struct
     char* DB_PASSWORD;
     char* DB_NAME;
 
+    char* TOKEN_SECRET;
+
 } config_t;
 
 config_t* m_config_content = NULL;
@@ -51,6 +53,10 @@ static void m_init_config_content()
     m_config_content->DB_USER = strdup("user");
     m_config_content->DB_PASSWORD = strdup("password");
     m_config_content->DB_NAME = strdup("database");
+
+    /* No default: a built-in signing key would be the same on every
+     * deployment, so the server refuses to start without one. */
+    m_config_content->TOKEN_SECRET = NULL;
 }
 
 void parse_set_log_config(log_config* log)
@@ -77,6 +83,11 @@ void parse_set_db_config(db_config* db)
     db->DB_NAME = m_config_content->DB_NAME;
 }
 
+void parse_set_auth_config(auth_config* auth)
+{
+    auth->TOKEN_SECRET = m_config_content->TOKEN_SECRET;
+}
+
 void parse_free_config()
 {
     free(m_config_content->LOG_FILE_PATH);
@@ -89,6 +100,8 @@ void parse_free_config()
     free(m_config_content->DB_USER);
     free(m_config_content->DB_PASSWORD);
     free(m_config_content->DB_NAME);
+
+    free(m_config_content->TOKEN_SECRET);
 
     free(m_config_content);
     m_config_content = NULL;
@@ -192,6 +205,11 @@ int parse_config(const char *filename)
         {
             free(m_config_content->DB_NAME);
             m_config_content->DB_NAME = strdup(val);
+        }
+        else if (strcmp(key, "TOKEN_SECRET") == 0)
+        {
+            free(m_config_content->TOKEN_SECRET);
+            m_config_content->TOKEN_SECRET = strdup(val);
         }
     }
 

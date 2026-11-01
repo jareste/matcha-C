@@ -3,8 +3,11 @@ set -e
 
 CONFIG=/app/config
 
-# Rewrite ./config from the environment, so the same image works against any
-# database/port without rebuilding. matCha reads "config" relative to its cwd.
+: "${DB_USER:?not set - compose reads it from .env, run 'make secrets' first}"
+: "${DB_PASSWORD:?not set - compose reads it from .env, run 'make secrets' first}"
+: "${DB_NAME:?not set - compose reads it from .env, run 'make secrets' first}"
+: "${TOKEN_SECRET:?not set - compose reads it from .env, run 'make secrets' first}"
+
 update_config() {
     key="$1"
     val="$2"
@@ -16,15 +19,18 @@ update_config() {
     fi
 }
 
-update_config DB_HOST     "${DB_HOST:-localhost}"
-update_config DB_PORT     "${DB_PORT:-5432}"
-update_config DB_USER     "${DB_USER:-admin}"
-update_config DB_PASSWORD "${DB_PASSWORD:-1234qwer}"
-update_config DB_NAME     "${DB_NAME:-matcha_db}"
-update_config PORT        "${PORT:-8080}"
-update_config LOG_LEVEL   "${LOG_LEVEL:-10}"
-update_config SSL_ENABLE  "${SSL_ENABLE:-n}"
-update_config CERT_PATH   "${CERT_PATH:-certs/cert.pem}"
-update_config KEY_PATH    "${KEY_PATH:-certs/key.pem}"
+update_config DB_HOST      "${DB_HOST:-localhost}"
+update_config DB_PORT      "${DB_PORT:-5432}"
+update_config DB_USER      "$DB_USER"
+update_config DB_PASSWORD  "$DB_PASSWORD"
+update_config DB_NAME      "$DB_NAME"
+update_config TOKEN_SECRET "$TOKEN_SECRET"
+update_config PORT         "${PORT:-8080}"
+update_config LOG_LEVEL    "${LOG_LEVEL:-10}"
+update_config SSL_ENABLE   "${SSL_ENABLE:-n}"
+update_config CERT_PATH    "${CERT_PATH:-certs/cert.pem}"
+update_config KEY_PATH     "${KEY_PATH:-certs/key.pem}"
+
+chmod 600 "$CONFIG"
 
 exec "$@"

@@ -12,6 +12,8 @@ coverage/
 .env.*
 !.env.example
 
+server/config
+
 # Vite
 *.local
 

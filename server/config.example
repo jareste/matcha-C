@@ -1,0 +1,21 @@
+LOG_LEVEL=10
+LOG_FILE_PATH=log.txt
+LOG_ERASE=y
+
+PORT=8080
+
+# When active, binary must be built with -DUSE_SSL
+SSL_ENABLE=n
+CERT_PATH=certs/cert.pem
+KEY_PATH=certs/key.pem
+
+DB_HOST=localhost
+DB_PORT=5432
+
+# Credentials. Left empty on purpose: `make secrets` copies this file to
+# ./config and fills these in from the repo-root .env. The server refuses to
+# start with an empty TOKEN_SECRET.
+DB_USER=
+DB_PASSWORD=
+DB_NAME=
+TOKEN_SECRET=

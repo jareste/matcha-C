@@ -7,7 +7,29 @@
 #include <openssl/hmac.h>
 #include <openssl/buffer.h>
 
-#define FIXED_KEY "s3cr3t!KEY#123"
+static char* m_secret = NULL;
+static size_t m_secret_len = 0;
+
+int token_init(const char* secret)
+{
+    if (!secret || *secret == '\0')
+        return ERROR;
+
+    free(m_secret);
+    m_secret = strdup(secret);
+    if (!m_secret)
+        return ERROR;
+
+    m_secret_len = strlen(m_secret);
+    return SUCCESS;
+}
+
+void token_cleanup()
+{
+    free(m_secret);
+    m_secret = NULL;
+    m_secret_len = 0;
+}
 
 static int base64_encode(const unsigned char* input, size_t len, char* output, size_t outlen)
 {
@@ -84,11 +106,14 @@ int token_generate(const char* username, const char* email, int uid, char* out_t
     if (!username || !email || !out_token || out_token_len == 0)
         return ERROR;
 
+    if (!m_secret)
+        return ERROR;
+
     timestamp = time(NULL);
     snprintf(payload, sizeof(payload), "%s|%s|%d|%ld", username, email, uid, timestamp);
 
     hmac = HMAC(EVP_sha256(),
-                FIXED_KEY, strlen(FIXED_KEY),
+                m_secret, m_secret_len,
                 (unsigned char*)payload, strlen(payload),
                 NULL, NULL);
     if (!hmac) return ERROR;
@@ -125,6 +150,9 @@ int token_validate(const char* token, char** out_username, char** out_email, int
     if (!token || !out_username || !out_email || !out_uid)
         return ERROR;
 
+    if (!m_secret)
+        return ERROR;
+
     decoded_len = base64_decode(token, decoded, sizeof(decoded) - 1);
     if (decoded_len <= 0)
         return ERROR;
@@ -146,7 +174,7 @@ int token_validate(const char* token, char** out_username, char** out_email, int
     snprintf(payload, sizeof(payload), "%s|%s|%s|%s", username, email, uid_str, timestamp);
 
     hmac = HMAC(EVP_sha256(),
-                FIXED_KEY, strlen(FIXED_KEY),
+                m_secret, m_secret_len,
                 (unsigned char*)payload, strlen(payload),
                 NULL, NULL);
     if (!hmac)

@@ -1,14 +1,17 @@
-version: "3.8"
-
+# Database only, for running the server straight on the host instead of in a
+# container. Credentials come from the repo-root .env, so this needs
+# `--env-file ../.env` (which `make -C ../server db_up` passes for you).
+#
+# The full stack lives in ../docker-compose.yml; prefer that one.
 services:
   db:
     image: postgres:15
     container_name: matcha-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 1234qwer
-      POSTGRES_DB: matcha_db
+      POSTGRES_USER: ${DB_USER:?missing in .env - run make secrets}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?missing in .env - run make secrets}
+      POSTGRES_DB: ${DB_NAME:?missing in .env - run make secrets}
     ports:
       - "5432:5432"
     volumes:
