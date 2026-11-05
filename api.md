@@ -7,7 +7,7 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 - **Base URL:** `http://localhost:8080`
 - **Format:** JSON in and out. Errors are always `{"error": "..."}`.
 - **Auth:** `POST /api/login` sets the `token` cookie (`HttpOnly; SameSite=Strict`). Send requests with `credentials: "include"`.
-- **No cookie** on an auth route → `403 {"error": "Forbidden"}`. **Invalid token** → connection closed, no response.
+- **No cookie** on an auth route → `403 {"error": "Forbidden"}`. **Invalid or expired token** → `401 {"error": "Invalid or expired session"}`. On any route but login/logout, the frontend treats both as "session lost": it clears its auth state and sends the user to login.
 - **Unknown route** → `404 {"error": "Not Found"}`.
 - **Dates:** not unified yet. **Pagination:** none.
 
@@ -98,6 +98,8 @@ Called by the frontend page `/reset-password?token=<token>`. Replaces the passwo
 - **500** `Failed to reset password`
 
 ### GET `/api/validate`
+
+Tells the frontend whether a session is active and who owns it. Called once when the app loads and right after login.
 
 - **200** `{"success": true, "message": "User is valid", "username": "<username>"}`
 - **405** `Method Not Allowed`
@@ -225,7 +227,8 @@ Raw WebSocket. Connects, no handlers.
 
 ## Known issues
 
-- Invalid token → no response (should be `401`).
+- Missing cookie on an auth route answers `403 Forbidden` (should be `401`). Until then the frontend also treats exactly `403 {"error": "Forbidden"}` as "session lost".
+- Unknown-route `404` always sends `Access-Control-Allow-Origin: http://localhost:8000` instead of the request's origin, so a browser on another origin sees a network error, not the 404.
 - `send` recipient is hard-coded to user 2.
 - No way to get a picture ID (profile returns file paths, upload returns nothing).
 - `/api/pics/get` without a query string crashes.
@@ -234,7 +237,6 @@ Raw WebSocket. Connects, no handlers.
 
 ## To agree on
 
-- `GET /api/me` (or keep `/api/validate`)
 - `/api/auth/*` naming
 - 401 vs 403 vs 400
 - `/api/verify-email` contract (frontend relies on 400 = invalid, 410 = expired)

@@ -27,7 +27,7 @@ function inputClass(invalid: boolean) {
 }
 
 function Login() {
-  const { status, login } = useAuth()
+  const { status, sessionExpired, login } = useAuth()
   const from = (useLocation().state as { from?: string } | null)?.from ?? '/'
   const [form, setForm] = useState<LoginForm>({ email: '', password: '' })
   const [errors, setErrors] = useState<FieldErrors>({})
@@ -67,6 +67,12 @@ function Login() {
   return (
     <section className="mx-auto w-full max-w-sm">
       <h1 className="text-2xl font-semibold sm:text-3xl">Log in</h1>
+
+      {sessionExpired && !formError && (
+        <p role="status" className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+          Your session has expired. Please log in again.
+        </p>
+      )}
 
       <form className="mt-6 space-y-4" noValidate onSubmit={handleSubmit}>
         {formError && (

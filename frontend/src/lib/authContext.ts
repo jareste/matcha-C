@@ -13,6 +13,8 @@ export type AuthResult = { ok: true } | { ok: false; error: string }
 export type AuthContextValue = {
   status: AuthStatus
   user: User | null
+  // True once an API call reported the session gone while logged in; cleared by the next login.
+  sessionExpired: boolean
   login: (email: string, password: string) => Promise<AuthResult>
   logout: () => Promise<AuthResult>
 }

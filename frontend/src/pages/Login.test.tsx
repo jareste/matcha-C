@@ -142,6 +142,7 @@ describe('logout', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Log in' })).toBeInTheDocument()
     expect(within(header()).getByRole('link', { name: 'Log in' })).toBeInTheDocument()
     expect(within(header()).queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument()
+    expect(screen.queryByText(/session has expired/)).not.toBeInTheDocument()
 
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toMatch(/\/api\/logout$/)
