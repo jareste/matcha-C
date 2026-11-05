@@ -12,6 +12,8 @@ coverage/
 .env.*
 !.env.example
 
+server/config
+
 # Vite
 *.local
 
@@ -32,3 +34,5 @@ test-results/
 # Classic old OS lol
 .DS_Store
 *.swp
+
+server/uploads/

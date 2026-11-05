@@ -26,7 +26,6 @@ typedef struct
     char* username;
     char* email;
 
-    /* Owned by the router: the Origin header of this request, never NULL. */
     char* origin;
     cJSON* json;
 } http_request_ctx_t;
@@ -92,6 +91,9 @@ typedef enum
     CODE_403_FORBIDDEN = 403,
     CODE_404_NOT_FOUND = 404,
     CODE_405_METHOD_NOT_ALLOWED = 405,
+    CODE_409_CONFLICT = 409,
+    CODE_413_CONTENT_TOO_LARGE = 413,
+    CODE_415_UNSUPPORTED_MEDIA_TYPE = 415,
     CODE_500_INTERNAL_SERVER_ERROR = 500,
     CODE_503_SERVICE_UNAVAILABLE = 503
 } HTTP_response_code_t;
@@ -108,6 +110,10 @@ int router_handle_http_request(int fd, const char* request, size_t request_len);
 int router_http_generate_response(int fd, HTTP_response_code_t code, const char* body, const char* origin);
 int router_http_respond_ex(int fd, HTTP_response_code_t code, const char* body,
                            const char* origin, const char* extra_headers);
+
+int router_http_respond_binary(int fd, HTTP_response_code_t code,
+                               const void* body, size_t body_len,
+                               const char* content_type, const char* origin);
 int router_parse_http_request(const char* request, size_t request_len, http_request_t* out_request);
 void free_http_request(http_request_t* request);
 char* get_header_value(const char *req, const char *key);

@@ -69,7 +69,7 @@ $(OBJ_DIR)/%.o: %.c
 	${CC} -MMD $(CFLAGS) -c $< -o $@
 
 
-all: .gitignore create_cert build_libs build_cjson
+all: .gitignore create_cert config build_libs build_cjson
 	@echo "\033[1;32mBuilding $(NAME)...\033[0m"
 	@make --silent -C $(MULTIPARSER_DIR)
 	@$(MAKE) $(NAME)
@@ -142,6 +142,13 @@ re: fclean all
 
 .PHONY: all clean fclean re release .gitignore compile_ssl create_cert  db_up db_down db_reset test
 
+config:
+	@if [ -x ../tools/gen-secrets.sh ]; then \
+		$(MAKE) --silent -C .. secrets; \
+	else \
+		echo "No repo root in the build context; skipping config (entrypoint.sh renders it)."; \
+	fi
+
 create_cert:
 	@if [ ! -f certs/cert.pem ]; then \
 		mkdir -p certs; \
@@ -150,15 +157,20 @@ create_cert:
 		echo "Certificate already exists."; \
 	fi
 
-db_up:
+DB_COMPOSE := --env-file ../.env -f ../BBDD/docker-compose.yml
+
+../.env:
+	@$(MAKE) --silent -C .. secrets
+
+db_up: ../.env
 	@service docker start || true
 	@echo "Starting the database using Docker Compose..."
-	@docker compose -f ../BBDD/docker-compose.yml up -d || docker-compose -f ../BBDD/docker-compose.yml up -d
+	@docker compose $(DB_COMPOSE) up -d || docker-compose $(DB_COMPOSE) up -d
 	@echo "Database is up and running."
 
-db_down:
+db_down: ../.env
 	@echo "Stopping the database using Docker Compose..."
-	@docker compose -f ../BBDD/docker-compose.yml down || docker-compose -f ../BBDD/docker-compose.yml down || true
+	@docker compose $(DB_COMPOSE) down || docker-compose $(DB_COMPOSE) down || true
 	@echo "Database has been stopped."
 
 db_clean:
@@ -167,8 +179,9 @@ db_clean:
 db_reset: db_down db_clean db_up
 	@echo "Database has been reset."
 
-db_connect:
-	@psql -h localhost -p 5432 -U admin -d matcha_db
+db_connect: ../.env
+	@set -a; . ../.env; set +a; \
+		PGPASSWORD="$$DB_PASSWORD" psql -h localhost -p 5432 -U "$$DB_USER" -d "$$DB_NAME"
 
 docker_start:
 	@echo "Starting Docker..."

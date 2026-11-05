@@ -12,3 +12,11 @@ certs/
 log.txt
 cookies.pkl
 .git/
+
+# Keep real credentials out of the image: "COPY . ." would bake the generated
+# ./config into a build layer. entrypoint.sh renders /app/config from
+# config.example plus the environment at startup instead.
+config
+.env
+.env.*
+uploads/

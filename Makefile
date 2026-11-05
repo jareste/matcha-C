@@ -1,13 +1,20 @@
 UNAME_S := $(shell uname -s)
 
-all: docker-up
+all: secrets docker-up
 	@docker compose up -d --build
 	@echo "Server on http://localhost:8080 — 'make logs' to follow it."
 
-tls: docker-up
+tls: secrets docker-up
 	@SSL_ENABLE=y PORT=8443 HOST_PORT=8443 docker compose up -d --build --force-recreate server
 	@echo "Server on https://localhost:8443 — 'make logs' to follow it."
 	@echo "The cert is self-signed, so curl needs -k and the browser will warn once."
+
+secrets:
+	@./tools/gen-secrets.sh
+
+secrets-clean:
+	@rm -f .env server/config
+	@echo "Removed .env and server/config."
 
 # The idea is that before any other operation, to ensure that the Docker daemon is running.
 # May need some adjustments
@@ -50,14 +57,14 @@ sh: docker-up
 	@docker exec -it matcha-server sh
 
 db_connect: docker-up
-	@docker exec -it matcha-db psql -U admin -d matcha_db
+	@docker exec -it matcha-db sh -c 'psql -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"'
 
 PY ?= $(shell [ -x server/.venv/bin/python ] && echo server/.venv/bin/python || echo python3)
 
-test: docker-up
+test: secrets docker-up
 	@$(PY) -m pytest server/tests -q
 
-test-tls: docker-up
+test-tls: secrets docker-up
 	@MATCHA_BASE_URL=https://localhost:8443 $(PY) -m pytest server/tests -q
 
 down:
@@ -68,4 +75,4 @@ fclean:
 	@echo "Removing containers AND the database volume..."
 	@docker compose down -v
 
-.PHONY: all docker-up logs ps restart re sh db_connect test test-tls down fclean
+.PHONY: all secrets secrets-clean docker-up logs ps restart re sh db_connect test test-tls down fclean

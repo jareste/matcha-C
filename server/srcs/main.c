@@ -7,6 +7,7 @@
 #include "router/router_api.h"
 #include "mail/mail_api.h"
 #include "api/api.h"
+#include "api/umgmt/token.h"
 #include "db/db_api.h"
 #include "db/tables/db_table_user.h"
 #include "db/tables/db_table_tag.h"
@@ -112,7 +113,8 @@ int main()
     ssl_config ssl_config;
     log_config log_config;
     db_config db_config;
-    
+    auth_config auth_config;
+
     if (parse_config("config") == ERROR)
             goto error;
 
@@ -121,6 +123,15 @@ int main()
 
     parse_set_db_config(&db_config);
     parse_set_ssl_config(&ssl_config);
+    parse_set_auth_config(&auth_config);
+
+    if (token_init(auth_config.TOKEN_SECRET) == ERROR)
+    {
+        log_msg(LOG_LEVEL_ERROR,
+                "TOKEN_SECRET is missing from ./config: run 'make secrets' from the repo root.\n");
+        goto error;
+    }
+
     if (server_init(ssl_config.PORT, ssl_config.SSL_ENABLE,
                     ssl_config.CERT_PATH, ssl_config.KEY_PATH) == ERROR)
         goto error;
@@ -146,6 +157,7 @@ int main()
     signal(SIGINT, signal_handler);
     main_loop();
     router_http_clear();
+    token_cleanup();
     log_msg(LOG_LEVEL_INFO, "Exiting...\n");
     log_close();
 
@@ -155,5 +167,6 @@ error:
     parse_free_config();
     server_cleanup();
     router_http_clear();
+    token_cleanup();
     return ERROR;
 }

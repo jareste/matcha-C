@@ -4,15 +4,15 @@ services:
     container_name: matcha-db
     restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: 1234qwer
-      POSTGRES_DB: matcha_db
+      POSTGRES_USER: ${DB_USER:?missing in .env - run make secrets}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?missing in .env - run make secrets}
+      POSTGRES_DB: ${DB_NAME:?missing in .env - run make secrets}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d matcha_db"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -28,18 +28,22 @@ services:
     environment:
       DB_HOST: db
       DB_PORT: 5432
-      DB_USER: admin
-      DB_PASSWORD: 1234qwer
-      DB_NAME: matcha_db
+      DB_USER: ${DB_USER:?missing in .env - run make secrets}
+      DB_PASSWORD: ${DB_PASSWORD:?missing in .env - run make secrets}
+      DB_NAME: ${DB_NAME:?missing in .env - run make secrets}
+      TOKEN_SECRET: ${TOKEN_SECRET:?missing in .env - run make secrets}
       PORT: "${PORT:-8080}"
       LOG_LEVEL: 10
       # n = plain HTTP, y = TLS
       SSL_ENABLE: "${SSL_ENABLE:-n}"
       CERT_PATH: certs/cert.pem
       KEY_PATH: certs/key.pem
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
 
 volumes:
   postgres_data:
+  uploads_data:

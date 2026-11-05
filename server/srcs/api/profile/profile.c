@@ -120,9 +120,12 @@ void profile_get_user(void* _ctx, void *user_data)
     char* response;
     cJSON* json_response;
     cJSON* json_tags;
+    cJSON* json_tag;
     cJSON* json_pics;
+    cJSON* entry;
     tag_t_array* tags;
     picture_t_array* pics;
+    size_t i;
 
     if (!ctx)
         return;
@@ -175,9 +178,12 @@ void profile_get_user(void* _ctx, void *user_data)
     if (tags && tags->count > 0)
     {
         json_tags = cJSON_CreateArray();
-        for (size_t i = 0; i < tags->count; i++)
+        for (i = 0; i < tags->count; i++)
         {
-            cJSON_AddItemToArray(json_tags, cJSON_CreateString(tags->tags[i]->name));
+            json_tag = cJSON_CreateObject();
+            cJSON_AddNumberToObject(json_tag, "id", tags->tags[i]->id);
+            cJSON_AddStringToObject(json_tag, "name", tags->tags[i]->name);
+            cJSON_AddItemToArray(json_tags, json_tag);
         }
         cJSON_AddItemToObject(json_response, "tags", json_tags);
     }
@@ -192,9 +198,13 @@ void profile_get_user(void* _ctx, void *user_data)
     if (pics && pics->count > 0)
     {
         json_pics = cJSON_CreateArray();
-        for (size_t i = 0; i < pics->count; i++)
+        for (i = 0; i < pics->count; i++)
         {
-            cJSON_AddItemToArray(json_pics, cJSON_CreateString(pics->pictures[i]->file_path));
+            entry = cJSON_CreateObject();
+
+            cJSON_AddNumberToObject(entry, "id", pics->pictures[i]->id);
+            cJSON_AddBoolToObject(entry, "is_profile", pics->pictures[i]->is_profile);
+            cJSON_AddItemToArray(json_pics, entry);
         }
         cJSON_AddItemToObject(json_response, "pictures", json_pics);
     }
@@ -209,7 +219,7 @@ void profile_get_user(void* _ctx, void *user_data)
     cJSON_Delete(json_response);
     db_tuser_free_user(user);
     log_msg(LOG_LEVEL_DEBUG, "Sent profile:\n%s\n", response);
-    router_http_generate_response(ctx->fd, CODE_200_OK, response, NULL);
+    router_http_generate_response(ctx->fd, CODE_200_OK, response, ctx->origin);
     free(response);
 
     return;
