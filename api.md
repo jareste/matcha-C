@@ -6,7 +6,9 @@ Contract between the C backend and the React frontend. Agree on changes here bef
 
 - **Base URL:** `http://localhost:8080` (`make`), or `https://localhost:8443` (`make tls`, self-signed).
 - **Format:** JSON in and out. Errors are always `{"error": "..."}`.
-- **Auth:** `POST /api/login` sets the `token` cookie (`HttpOnly; Path=/; SameSite=Strict`, plus `Secure` on a TLS listener). Send requests with `credentials: "include"`.
+- **Auth:** `POST /api/login` sets the `token` cookie (`HttpOnly; SameSite=Strict`). Send requests with `credentials: "include"`.
+- **No cookie** on an auth route → `403 {"error": "Forbidden"}`. **Invalid or expired token** → `401 {"error": "Invalid or expired session"}`. On any route but login/logout, the frontend treats both as "session lost": it clears its auth state and sends the user to login.
+- **Unknown route** → `404 {"error": "Not Found"}`.
 - **Dates:** not unified yet. **Pagination:** none.
 
 ### Central preconditions
@@ -136,6 +138,8 @@ Called by the frontend page `/reset-password?token=<token>`. Replaces the passwo
 - **500** `Failed to reset password`
 
 ### GET `/api/validate`
+
+Tells the frontend whether a session is active and who owns it. Called once when the app loads and right after login.
 
 - **200** `{"success": true, "message": "User is valid", "username": "<username>"}`
 
@@ -386,49 +390,16 @@ Raw WebSocket. Connects, no handlers.
 
 ## Known issues
 
-- `/api/profile/get?id=` exposes other users' email. Spec subject says a profile
-  must show everything *except* the email address and password. -> we must fix this.
-- `send` recipient is hard-coded to user 2, so chat cannot be used end to end.
-- `location` is the hard-coded string `"secretito"`; GPS positioning is not implemented.
-- `/api/chat/messages?id=abc` answers `200 {"messages": []}` instead of `400`
-  (`atoi` turns it into 0).
-- `/api/profile/update` accepts an empty object as a successful no-op.
-
-### Fixed since the last revision of this document
-
-- `GET /api/tags/get` lists the catalogue, so `/api/tags/insert` ids no longer
-  have to be known in advance, and `/api/profile/get` returns the caller's tags
-  as `{id, name}` objects instead of bare names.
-- `/api/tags/insert` validates the ids instead of answering
-  `200 "Tags successfully added"` whatever happened, and reports what it did.
-  An unknown id used to be written into `user_tags` as a row naming a tag that
-  does not exist, invisible to every read path, because the table had no
-  foreign key; it now has one (`ON DELETE CASCADE` on both columns, added at
-  startup together with a one-time cleanup of the rows the old code wrote).
-- `POST /api/tags/delete` exists, so a tag can be removed again.
-- The default tags are seeded by `db_ttag_init()`, after it creates the table,
-  rather than from `db_init()`, which runs before any table exists: on a brand
-  new database the catalogue used to stay empty until the server was restarted
-  once.
-- `Access-Control-Allow-Origin` is no longer hard-coded to
-  `http://localhost:8000`. The `Origin` header is now parsed before the route
-  lookup, so the router-level `400` / `404` / `500` echo it too, and
-  `/api/profile/get`, `/api/chat` and `/api/chat/messages` pass `ctx->origin`
-  instead of `NULL`. With no `Origin` on the request, no CORS header is sent at
-  all rather than a made-up one.
-- The CORS preflight advertises the full method set, so a cross-origin
-  `PATCH /api/profile/update` is no longer blocked by the browser.
-- The `token` cookie carries `Secure` when the listener is TLS.
-- Invalid token now answers `401`, instead of closing the connection with no response.
-- `/api/pics/get` without a query string answers `400`, instead of crashing the process.
-- Method is now enforced on every route, not just the auth ones.
-- Picture ids are now reachable: `/api/pics/insert` returns the new id and
-  `/api/profile/get` lists ids.
-- `/api/login` no longer distinguishes an unknown email from a wrong password.
+- Missing cookie on an auth route answers `403 Forbidden` (should be `401`). Until then the frontend also treats exactly `403 {"error": "Forbidden"}` as "session lost".
+- Unknown-route `404` always sends `Access-Control-Allow-Origin: http://localhost:8000` instead of the request's origin, so a browser on another origin sees a network error, not the 404.
+- `send` recipient is hard-coded to user 2.
+- No way to get a picture ID (profile returns file paths, upload returns nothing).
+- `/api/pics/get` without a query string crashes.
+- `/api/profile/get?id=` exposes other users' email.
+- Method not checked outside auth routes.
 
 ## To agree on
 
-- `GET /api/me` (or keep `/api/validate`)
 - `/api/auth/*` naming
 - Whether a missing cookie should be `401` rather than `403` (a bad token is already `401`)
 - `/api/verify-email` contract (frontend relies on 400 = invalid, 410 = expired)

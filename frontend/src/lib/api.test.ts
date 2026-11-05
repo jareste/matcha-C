@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { apiGet, apiPost } from './api.ts'
+import { apiGet, apiPost, onSessionLost } from './api.ts'
 
 function jsonResponse(status: number, body: unknown) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -63,5 +63,68 @@ describe('apiGet', () => {
     const [url, init] = fetchMock.mock.calls[0]
     expect(url).toMatch(/\/api\/validate$/)
     expect(init).toEqual({ method: 'GET', credentials: 'include' })
+  })
+})
+
+describe('session loss', () => {
+  function respond(status: number, error: string) {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(status, { error })))
+  }
+
+  test.each([
+    [401, 'Invalid or expired session'],
+    [403, 'Forbidden'],
+  ])('notifies the handler on %i %s', async (status, error) => {
+    const handler = vi.fn()
+    const off = onSessionLost(handler)
+    respond(status, error)
+
+    expect(await apiGet('/api/profile/get')).toEqual({ ok: false, status, error })
+    expect(handler).toHaveBeenCalledTimes(1)
+    off()
+  })
+
+  test.each([
+    [400, 'Invalid credentials'],
+    [403, 'You are blocked'],
+    [404, 'Not Found'],
+    [500, 'Failed'],
+  ])('ignores %i %s', async (status, error) => {
+    const handler = vi.fn()
+    const off = onSessionLost(handler)
+    respond(status, error)
+
+    await apiPost('/x', {})
+    expect(handler).not.toHaveBeenCalled()
+    off()
+  })
+
+  test('ignores a network failure', async () => {
+    const handler = vi.fn()
+    const off = onSessionLost(handler)
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')))
+
+    await apiGet('/x')
+    expect(handler).not.toHaveBeenCalled()
+    off()
+  })
+
+  test('ignores calls that opt out', async () => {
+    const handler = vi.fn()
+    const off = onSessionLost(handler)
+    respond(401, 'Unauthorized')
+
+    await apiGet('/api/validate', { ignoreSessionLoss: true })
+    expect(handler).not.toHaveBeenCalled()
+    off()
+  })
+
+  test('stops notifying once unregistered', async () => {
+    const handler = vi.fn()
+    onSessionLost(handler)()
+    respond(401, 'Unauthorized')
+
+    await apiGet('/x')
+    expect(handler).not.toHaveBeenCalled()
   })
 })
